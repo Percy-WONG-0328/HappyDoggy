@@ -69,6 +69,7 @@ export default function Home() {
   const [events, setEvents] = useState(() => createMockEvents(getLocalDateKey(new Date(), timezone)));
   const [draft, setDraft] = useState<DraftRange | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [mobileCreateLane, setMobileCreateLane] = useState<RenderLane | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -287,9 +288,20 @@ export default function Home() {
   function handleEmptyPointerDown(event: React.PointerEvent<HTMLDivElement>, lane: RenderLane) {
     if (event.button !== 0) return;
     const minutes = minutesFromPointer(event.clientY);
+    const target = event.currentTarget;
+    const pointerId = event.pointerId;
+
+    if (event.pointerType === "touch" && mobileCreateLane) {
+      event.preventDefault();
+      target.setPointerCapture(pointerId);
+      setDragState({ kind: "create", lane: mobileCreateLane, anchorMinutes: minutes });
+      setDraft({ lane: mobileCreateLane, startMinutes: minutes, endMinutes: minutes + MIN_EVENT_MINUTES });
+      return;
+    }
 
     if (event.pointerType === "touch") {
       longPressRef.current = window.setTimeout(() => {
+        target.setPointerCapture(pointerId);
         setDragState({ kind: "create", lane, anchorMinutes: minutes });
         setDraft({ lane, startMinutes: minutes, endMinutes: minutes + MIN_EVENT_MINUTES });
       }, 420);
@@ -394,6 +406,7 @@ export default function Home() {
       }
     }
 
+    setMobileCreateLane(null);
     setDraft(null);
     setDragState(null);
   }
@@ -533,14 +546,16 @@ export default function Home() {
           <h1>{formatDateLabel(dateKey)}</h1>
         </div>
         <div className="toolbar">
-          <button aria-label="Previous day" onClick={() => void resetDay(addDays(dateKey, -1))}>
-            &lt;
-          </button>
-          <input value={dateKey} type="date" onChange={(event) => void resetDay(event.target.value)} />
-          <button onClick={() => void resetDay(getLocalDateKey(new Date(), timezone))}>Today</button>
-          <button aria-label="Next day" onClick={() => void resetDay(addDays(dateKey, 1))}>
-            &gt;
-          </button>
+          <div className="dateControls">
+            <button aria-label="Previous day" onClick={() => void resetDay(addDays(dateKey, -1))}>
+              &lt;
+            </button>
+            <input value={dateKey} type="date" onChange={(event) => void resetDay(event.target.value)} />
+            <button onClick={() => void resetDay(getLocalDateKey(new Date(), timezone))}>Today</button>
+            <button aria-label="Next day" onClick={() => void resetDay(addDays(dateKey, 1))}>
+              &gt;
+            </button>
+          </div>
           <select
             value={selectedUserId}
             onChange={(event) => setSelectedUserId(event.target.value)}
@@ -558,6 +573,22 @@ export default function Home() {
                 ))
             )}
           </select>
+          <div className="mobileCreateActions" aria-label="Mobile create mode">
+            <button
+              className={mobileCreateLane === "current" ? "activeCreate" : ""}
+              onClick={() => setMobileCreateLane((lane) => (lane === "current" ? null : "current"))}
+            >
+              + Me
+            </button>
+            {selectedUser ? (
+              <button
+                className={mobileCreateLane === "shared" ? "activeCreate" : ""}
+                onClick={() => setMobileCreateLane((lane) => (lane === "shared" ? null : "shared"))}
+              >
+                + Both
+              </button>
+            ) : null}
+          </div>
           {cloudEnabled ? (
             <span className={`syncBadge ${saveStatus}`}>{getSaveStatusLabel(saveStatus)}</span>
           ) : null}

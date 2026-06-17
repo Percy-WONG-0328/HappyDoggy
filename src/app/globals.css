@@ -125,6 +125,13 @@ h1 {
   gap: 8px;
 }
 
+.dateControls,
+.mobileCreateActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .toolbar button,
 .toolbar input,
 .toolbar select,
@@ -146,9 +153,11 @@ h1 {
 }
 
 .syncBadge {
+  width: 82px;
   min-height: 32px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
@@ -172,6 +181,16 @@ h1 {
 .syncBadge.error {
   border-color: #d8b9b7;
   color: #8f3734;
+}
+
+.mobileCreateActions {
+  display: none;
+}
+
+.activeCreate {
+  border-color: #1c2430 !important;
+  background: #1c2430 !important;
+  color: #ffffff !important;
 }
 
 .allDayStrip {
@@ -509,58 +528,89 @@ select:disabled {
   }
 
   .toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
     width: 100%;
-    justify-content: flex-start;
+    align-items: center;
+    justify-content: stretch;
     gap: 6px;
   }
 
-  .toolbar input,
+  .dateControls {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 58px 34px;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .mobileCreateActions {
+    display: flex;
+    grid-column: 1;
+    gap: 6px;
+  }
+
   .toolbar select {
-    flex: 1 1 136px;
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .toolbar input {
+    width: 100%;
     min-width: 0;
   }
 
   .toolbar button {
     min-height: 36px;
-    padding: 0 10px;
+    padding: 0 8px;
+    white-space: nowrap;
   }
 
   .syncBadge {
+    grid-column: 2;
+    width: 76px;
     min-height: 30px;
-    padding: 0 8px;
+    padding: 0 6px;
   }
 
   .calendarFrame {
-    grid-template-columns: 48px minmax(430px, 1fr);
-    overflow-x: auto;
+    grid-template-columns: 38px minmax(0, 1fr);
+    width: 100%;
+    overflow-x: hidden;
     overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
   }
 
   .allDayStrip {
-    grid-template-columns: 48px 1fr;
+    grid-template-columns: 38px 1fr;
     padding: 0 2px;
   }
 
   .timeRail span {
-    right: 6px;
-    font-size: 0.68rem;
+    right: 4px;
+    font-size: 0.6rem;
   }
 
   .eventBody {
-    padding: 8px 8px;
+    padding: 6px 5px;
   }
 
   .eventTitle {
-    font-size: 0.78rem;
+    font-size: 0.68rem;
   }
 
   .eventMeta {
-    font-size: 0.66rem;
+    font-size: 0.58rem;
   }
 
   .laneHeaders {
-    font-size: 0.72rem;
+    font-size: 0.64rem;
+  }
+
+  .eventBlock,
+  .draftBlock {
+    border-left-width: 4px;
+    border-radius: 6px;
   }
 
   .modalLayer {
