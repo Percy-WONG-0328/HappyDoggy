@@ -485,7 +485,7 @@ export default function Home() {
     if (!eventToDelete) return;
 
     if (!canDeleteEvent(eventToDelete, currentUser.id, cloudEnabled)) {
-      setStatusMessage("Only the event owner can delete this event.");
+      setStatusMessage("Only the owner or a shared participant can delete this event.");
       return;
     }
 
@@ -913,7 +913,10 @@ function canEditEvent(event: CalendarEvent, currentUserId: string, cloudEnabled:
 
 function canDeleteEvent(event: CalendarEvent, currentUserId: string, cloudEnabled: boolean) {
   if (!cloudEnabled) return true;
-  return event.ownerUserId === currentUserId;
+  return (
+    event.ownerUserId === currentUserId ||
+    (event.visibility !== "private" && event.participantUserIds.includes(currentUserId))
+  );
 }
 
 function userFromSession(user: { id: string; email?: string | null; user_metadata?: { display_name?: string } }): CalendarUser {
