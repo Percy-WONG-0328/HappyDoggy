@@ -315,6 +315,7 @@ export default function Home() {
 
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
     if (!dragState) return;
+    event.preventDefault();
     const minutes = minutesFromPointer(event.clientY);
 
     if (dragState.kind === "create") {
@@ -593,11 +594,17 @@ export default function Home() {
             <span className={`syncBadge ${saveStatus}`}>{getSaveStatusLabel(saveStatus)}</span>
           ) : null}
           {cloudEnabled ? (
-            <button onClick={() => refreshCloudEvents(dateKey).catch(handleCloudError)}>
+            <button className="syncButton" onClick={() => refreshCloudEvents(dateKey).catch(handleCloudError)}>
               {isSyncing ? "Syncing..." : "Sync"}
             </button>
           ) : null}
-          {cloudEnabled ? <button onClick={() => void handleLogout()}>Logout</button> : <button>Mock mode</button>}
+          {cloudEnabled ? (
+            <button className="logoutButton" onClick={() => void handleLogout()}>
+              Logout
+            </button>
+          ) : (
+            <button>Mock mode</button>
+          )}
         </div>
       </header>
       {statusMessage ? <p className="statusMessage">{statusMessage}</p> : null}
@@ -682,6 +689,7 @@ export default function Home() {
                 }}
                 onDragStart={(pointerEvent, mode) => {
                   if (!canEditEvent(segment.event, currentUser.id, cloudEnabled)) return;
+                  pointerEvent.preventDefault();
                   pointerEvent.stopPropagation();
                   pointerEvent.currentTarget.setPointerCapture(pointerEvent.pointerId);
                   const pointerMinutes = minutesFromPointer(pointerEvent.clientY);

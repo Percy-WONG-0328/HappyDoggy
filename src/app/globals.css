@@ -324,6 +324,12 @@ h1 {
   overflow: hidden;
 }
 
+.eventBlock:not(.readOnly),
+.eventBlock:not(.readOnly) .eventBody,
+.resizeHandle {
+  touch-action: none;
+}
+
 .eventBlock.shared {
   z-index: 6;
 }
@@ -359,6 +365,9 @@ h1 {
   color: var(--ink);
   padding: 8px 10px;
   text-align: left;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .eventTitle {
@@ -385,6 +394,9 @@ h1 {
   background: transparent;
   padding: 0;
   cursor: ns-resize;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .resizeHandle.top {
@@ -529,7 +541,7 @@ select:disabled {
 
   .toolbar {
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto;
     width: 100%;
     align-items: center;
     justify-content: stretch;
@@ -562,16 +574,22 @@ select:disabled {
   }
 
   .toolbar button {
-    min-height: 36px;
+    min-height: 34px;
     padding: 0 8px;
     white-space: nowrap;
   }
 
   .syncBadge {
+    display: none;
+  }
+
+  .syncButton {
+    display: none;
+  }
+
+  .logoutButton {
     grid-column: 2;
-    width: 76px;
-    min-height: 30px;
-    padding: 0 6px;
+    min-width: 48px;
   }
 
   .calendarFrame {
@@ -611,6 +629,10 @@ select:disabled {
   .draftBlock {
     border-left-width: 4px;
     border-radius: 6px;
+  }
+
+  .resizeHandle {
+    height: 18px;
   }
 
   .modalLayer {
