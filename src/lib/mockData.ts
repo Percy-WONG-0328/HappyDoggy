@@ -86,4 +86,4 @@ function offsetDateKey(dateKey: string, delta: number) {
 
 export const categories: CalendarEvent["category"][] = ["Life", "Study", "Date", "Work", "Health", "Other"];
 
-export const colors = ["#2f6df6", "#40a66f", "#e0a928", "#d84f83", "#cc514d", "#697386"];
+export const colors = ["#C17B6F", "#8FA68E", "#B8A898", "#8FA3B8", "#C4AA80", "#9B8EA8"];
