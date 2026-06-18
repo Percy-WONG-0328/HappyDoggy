@@ -27,7 +27,42 @@ type EventRow = {
   event_participants?: Array<{ user_id: string; role: string }>;
 };
 
+export type RelationshipInvite = {
+  id: string;
+  inviterId: string;
+  inviterEmail: string;
+  inviterDisplayName: string;
+  createdAt: string;
+};
+
+type RelationshipInviteRow = {
+  id: string;
+  user_id: string;
+  created_at: string;
+  profiles: Pick<ProfileRow, "id" | "email" | "display_name"> | Pick<ProfileRow, "id" | "email" | "display_name">[] | null;
+};
+
 const profileAccents = ["#2f6df6", "#d84f83", "#138a66", "#e0a928", "#7a5cff"];
+
+export async function signUpWithPassword(email: string, password: string, displayName: string) {
+  const supabase = requireSupabase();
+
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          display_name: displayName || email.split("@")[0]
+        }
+      }
+    });
+    if (error) throw error;
+    return Boolean(data.session);
+  } catch (error) {
+    throw coerceSupabaseError(error, "Could not reach Supabase Auth. Check your network or proxy and try again.");
+  }
+}
 
 export async function signInWithPassword(email: string, password: string) {
   const supabase = requireSupabase();
@@ -85,6 +120,85 @@ export async function fetchRelatedUsers(currentUserId: string): Promise<Calendar
   if (profileError) throw profileError;
 
   return (profiles as ProfileRow[]).map((profile, index) => mapProfile(profile, index));
+}
+
+export async function updateCurrentProfile(displayName: string) {
+  const supabase = requireSupabase();
+  const user = await getCurrentSessionUser();
+  if (!user) throw new Error("Sign in before updating your profile.");
+
+  const trimmedName = displayName.trim();
+  if (!trimmedName) throw new Error("Display name cannot be empty.");
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ display_name: trimmedName })
+    .eq("id", user.id);
+  if (error) throw error;
+
+  await supabase.auth.updateUser({ data: { display_name: trimmedName } });
+}
+
+export async function inviteUserByEmail(email: string) {
+  const supabase = requireSupabase();
+  const user = await getCurrentSessionUser();
+  if (!user) throw new Error("Sign in before inviting someone.");
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) throw new Error("Enter an email address to invite.");
+  if (normalizedEmail === user.email?.toLowerCase()) throw new Error("You cannot invite yourself.");
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id,email,display_name,avatar_url,created_at")
+    .eq("email", normalizedEmail)
+    .maybeSingle();
+  if (profileError) throw profileError;
+  if (!profile) throw new Error("No HappyDoggy account uses that email yet.");
+
+  const invitedProfile = profile as ProfileRow;
+  const { data: existingRelationship, error: existingError } = await supabase
+    .from("user_relationships")
+    .select("status")
+    .eq("user_id", user.id)
+    .eq("related_user_id", invitedProfile.id)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existingRelationship?.status === "active") throw new Error("You are already connected with this user.");
+  if (existingRelationship?.status === "pending") throw new Error("An invitation is already pending.");
+
+  const { error } = await supabase
+    .from("user_relationships")
+    .insert({
+      user_id: user.id,
+      related_user_id: invitedProfile.id,
+      status: "pending",
+      relationship_type: "close_friend"
+    });
+  if (error) throw error;
+}
+
+export async function fetchIncomingRelationshipInvites(): Promise<RelationshipInvite[]> {
+  const supabase = requireSupabase();
+  const user = await getCurrentSessionUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("user_relationships")
+    .select("id,user_id,created_at,profiles!user_relationships_user_id_fkey(id,email,display_name)")
+    .eq("related_user_id", user.id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  return ((data ?? []) as RelationshipInviteRow[]).map(mapRelationshipInvite);
+}
+
+export async function acceptRelationshipInvite(invite: RelationshipInvite) {
+  const supabase = requireSupabase();
+
+  const { error } = await supabase.rpc("accept_relationship_invite", { invite_id_to_accept: invite.id });
+  if (error) throw error;
 }
 
 export async function fetchEventsForDate(dateKey: string, timezone: string): Promise<CalendarEvent[]> {
@@ -173,6 +287,19 @@ function mapProfile(profile: ProfileRow, index: number): CalendarUser {
     email: profile.email,
     displayName: profile.display_name || profile.email,
     accent: profileAccents[index % profileAccents.length]
+  };
+}
+
+function mapRelationshipInvite(row: RelationshipInviteRow): RelationshipInvite {
+  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+  const email = profile?.email ?? "unknown@happydoggy.local";
+
+  return {
+    id: row.id,
+    inviterId: row.user_id,
+    inviterEmail: email,
+    inviterDisplayName: profile?.display_name || email.split("@")[0] || "Someone",
+    createdAt: row.created_at
   };
 }
 

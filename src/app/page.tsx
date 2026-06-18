@@ -5,15 +5,21 @@ import type { CalendarEvent, CalendarUser, LaidOutSegment, RenderLane } from "@/
 import { categories, colors, createMockEvents, currentUser as mockCurrentUser, makeEvent, users as mockUsers } from "@/lib/mockData";
 import { layoutSegments, splitEventsForDay } from "@/lib/layout";
 import {
+  acceptRelationshipInvite,
   canUseSupabase,
   createCalendarEvent,
   deleteCalendarEvent,
   fetchEventsForDate,
+  fetchIncomingRelationshipInvites,
   fetchRelatedUsers,
   getCurrentSessionUser,
+  inviteUserByEmail,
+  type RelationshipInvite,
   signInWithPassword,
   signOut,
-  updateCalendarEvent
+  signUpWithPassword,
+  updateCalendarEvent,
+  updateCurrentProfile
 } from "@/lib/calendarRepository";
 import {
   addDays,
@@ -58,6 +64,8 @@ type DragState =
     };
 
 type SaveStatus = "idle" | "saving" | "saved" | "syncing" | "error";
+type AuthMode = "login" | "register";
+type StatusTone = "error" | "success";
 
 export default function Home() {
   const timezone = getDefaultTimezone();
@@ -71,12 +79,18 @@ export default function Home() {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [mobileCreateLane, setMobileCreateLane] = useState<RenderLane | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authDisplayName, setAuthDisplayName] = useState("");
+  const [profileDisplayName, setProfileDisplayName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [relationshipInvites, setRelationshipInvites] = useState<RelationshipInvite[]>([]);
   const [isLoading, setIsLoading] = useState(cloudEnabled);
   const [isSyncing, setIsSyncing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [statusMessage, setStatusMessage] = useState("");
+  const [statusTone, setStatusTone] = useState<StatusTone>("error");
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const longPressRef = useRef<number | null>(null);
   const eventsRef = useRef(events);
@@ -95,6 +109,10 @@ export default function Home() {
   );
   const laidOutSegments = useMemo(() => layoutSegments(visible.segments), [visible.segments]);
   const editingEvent = editingEventId ? events.find((event) => event.id === editingEventId) ?? null : null;
+
+  useEffect(() => {
+    setProfileDisplayName(currentUser.displayName);
+  }, [currentUser.id, currentUser.displayName]);
 
   useEffect(() => {
     if (!cloudEnabled) return;
@@ -147,6 +165,7 @@ export default function Home() {
       if (editingEventId || dragState) return;
       if (refreshTimer) window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => {
+        refreshAccountContext().catch(handleCloudError);
         refreshCloudEvents(dateKey).catch(handleCloudError);
       }, 350);
     };
@@ -155,8 +174,10 @@ export default function Home() {
       .channel(`happydoggy-calendar-${currentUserId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, scheduleRealtimeRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "event_participants" }, scheduleRealtimeRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_relationships" }, scheduleRealtimeRefresh)
       .subscribe((status) => {
         if (status === "CHANNEL_ERROR") {
+          setStatusTone("error");
           setStatusMessage("Realtime connection failed. Manual Sync still works.");
           setSaveStatus("error");
         }
@@ -186,11 +207,13 @@ export default function Home() {
 
   function handleCloudError(error: unknown) {
     markSaveStatus("error");
+    setStatusTone("error");
     setStatusMessage(getErrorMessage(error));
   }
 
   async function bootstrapCloudSession() {
     setIsLoading(true);
+    setStatusTone("error");
     setStatusMessage("");
 
     try {
@@ -201,19 +224,31 @@ export default function Home() {
       }
 
       setCurrentUserId(sessionUser.id);
-      const relatedUsers = await fetchRelatedUsers(sessionUser.id);
-      const sessionProfile =
-        relatedUsers.find((user) => user.id === sessionUser.id) ?? userFromSession(sessionUser);
-      const nextUsers = [sessionProfile, ...relatedUsers.filter((user) => user.id !== sessionUser.id)];
-      setAppUsers(nextUsers);
-      const firstComparisonUser = relatedUsers.find((user) => user.id !== sessionUser.id);
-      setSelectedUserId(firstComparisonUser?.id ?? "");
+      await refreshAccountContext(sessionUser.id);
       await refreshCloudEvents(dateKey);
     } catch (error) {
       handleCloudError(error);
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function refreshAccountContext(sessionUserId = currentUserId) {
+    if (!cloudEnabled || sessionUserId === mockCurrentUser.id) return;
+
+    const relatedUsers = await fetchRelatedUsers(sessionUserId);
+    const sessionUser = await getCurrentSessionUser();
+    const sessionProfile =
+      relatedUsers.find((user) => user.id === sessionUserId) ??
+      (sessionUser ? userFromSession(sessionUser) : currentUser);
+    const nextUsers = [sessionProfile, ...relatedUsers.filter((user) => user.id !== sessionUserId)];
+    const firstComparisonUser = nextUsers.find((user) => user.id !== sessionUserId);
+    const nextSelectedUser = nextUsers.find((user) => user.id === selectedUserId && user.id !== sessionUserId);
+
+    setAppUsers(nextUsers);
+    setProfileDisplayName(sessionProfile.displayName);
+    setSelectedUserId((nextSelectedUser ?? firstComparisonUser)?.id ?? "");
+    setRelationshipInvites(await fetchIncomingRelationshipInvites());
   }
 
   async function refreshCloudEvents(nextDateKey: string) {
@@ -238,13 +273,23 @@ export default function Home() {
     }
   }
 
-  async function handleLogin(submitEvent: React.FormEvent<HTMLFormElement>) {
+  async function handleAuthSubmit(submitEvent: React.FormEvent<HTMLFormElement>) {
     submitEvent.preventDefault();
     setIsLoading(true);
     setStatusMessage("");
 
     try {
-      await signInWithPassword(authEmail, authPassword);
+      if (authMode === "register") {
+        const signedIn = await signUpWithPassword(authEmail, authPassword, authDisplayName);
+        if (!signedIn) {
+          setAuthMode("login");
+          setStatusTone("success");
+          setStatusMessage("Account created. Check your email if confirmation is required, then log in.");
+          return;
+        }
+      } else {
+        await signInWithPassword(authEmail, authPassword);
+      }
       await bootstrapCloudSession();
     } catch (error) {
       handleCloudError(error);
@@ -258,8 +303,60 @@ export default function Home() {
     await signOut();
     setCurrentUserId(mockCurrentUser.id);
     setAppUsers(mockUsers);
+    setRelationshipInvites([]);
     setEvents(createMockEvents(dateKey));
     setStatusMessage("");
+  }
+
+  async function handleProfileSave() {
+    if (!cloudEnabled) return;
+    setStatusMessage("");
+    markSaveStatus("saving");
+
+    try {
+      await updateCurrentProfile(profileDisplayName);
+      await refreshAccountContext();
+      markSaveStatus("saved");
+    } catch (error) {
+      handleCloudError(error);
+    }
+  }
+
+  async function handleInviteSubmit(submitEvent: React.FormEvent<HTMLFormElement>) {
+    submitEvent.preventDefault();
+    if (!cloudEnabled) return;
+
+    setStatusMessage("");
+    markSaveStatus("saving");
+
+    try {
+      await inviteUserByEmail(inviteEmail);
+      setInviteEmail("");
+      await refreshAccountContext();
+      markSaveStatus("saved");
+      setStatusTone("success");
+      setStatusMessage("Invitation sent.");
+    } catch (error) {
+      handleCloudError(error);
+    }
+  }
+
+  async function handleAcceptInvite(invite: RelationshipInvite) {
+    if (!cloudEnabled) return;
+
+    setStatusMessage("");
+    markSaveStatus("saving");
+
+    try {
+      await acceptRelationshipInvite(invite);
+      await refreshAccountContext();
+      await refreshCloudEvents(dateKey);
+      markSaveStatus("saved");
+      setStatusTone("success");
+      setStatusMessage(`You are now connected with ${invite.inviterDisplayName}.`);
+    } catch (error) {
+      handleCloudError(error);
+    }
   }
 
   async function resetDay(nextDateKey: string) {
@@ -461,6 +558,7 @@ export default function Home() {
     if (!existingEvent) return;
 
     if (!canEditEvent(existingEvent, currentUser.id, cloudEnabled)) {
+      setStatusTone("error");
       setStatusMessage("You can only edit your own events or shared events you participate in.");
       return;
     }
@@ -485,6 +583,7 @@ export default function Home() {
     if (!eventToDelete) return;
 
     if (!canDeleteEvent(eventToDelete, currentUser.id, cloudEnabled)) {
+      setStatusTone("error");
       setStatusMessage("Only the owner or a shared participant can delete this event.");
       return;
     }
@@ -507,9 +606,25 @@ export default function Home() {
   if (cloudEnabled && currentUserId === mockCurrentUser.id) {
     return (
       <main className="loginShell">
-        <form className="loginPanel" onSubmit={handleLogin}>
-          <p className="eyebrow">HappyDoggy Phase 2</p>
-          <h1>Sign in</h1>
+        <form className="loginPanel" onSubmit={handleAuthSubmit}>
+          <p className="eyebrow">HappyDoggy Phase 3</p>
+          <h1>{authMode === "login" ? "Sign in" : "Create account"}</h1>
+          <div className="segmentedControl" aria-label="Authentication mode">
+            <button
+              type="button"
+              className={authMode === "login" ? "activeSegment" : ""}
+              onClick={() => setAuthMode("login")}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              className={authMode === "register" ? "activeSegment" : ""}
+              onClick={() => setAuthMode("register")}
+            >
+              Register
+            </button>
+          </div>
           <label>
             Email
             <input
@@ -520,20 +635,31 @@ export default function Home() {
               required
             />
           </label>
+          {authMode === "register" ? (
+            <label>
+              Display name
+              <input
+                autoComplete="nickname"
+                value={authDisplayName}
+                onChange={(event) => setAuthDisplayName(event.target.value)}
+                placeholder="Percy"
+              />
+            </label>
+          ) : null}
           <label>
             Password
             <input
               type="password"
-              autoComplete="current-password"
+              autoComplete={authMode === "login" ? "current-password" : "new-password"}
               value={authPassword}
               onChange={(event) => setAuthPassword(event.target.value)}
               required
             />
           </label>
           <button type="submit" disabled={isLoading}>
-            {isLoading ? "Signing in..." : "Login"}
+            {isLoading ? "Working..." : authMode === "login" ? "Login" : "Create account"}
           </button>
-          {statusMessage ? <p className="statusMessage">{statusMessage}</p> : null}
+          {statusMessage ? <p className={`statusMessage ${statusTone}`}>{statusMessage}</p> : null}
         </form>
       </main>
     );
@@ -543,7 +669,7 @@ export default function Home() {
     <main className="appShell">
       <header className="topBar">
         <div>
-          <p className="eyebrow">{cloudEnabled ? "HappyDoggy Phase 2" : "HappyDoggy Phase 1"}</p>
+          <p className="eyebrow">{cloudEnabled ? "HappyDoggy Phase 3" : "HappyDoggy Phase 1"}</p>
           <h1>{formatDateLabel(dateKey)}</h1>
         </div>
         <div className="toolbar">
@@ -607,11 +733,48 @@ export default function Home() {
           )}
         </div>
       </header>
-      {statusMessage ? <p className="statusMessage">{statusMessage}</p> : null}
+      {cloudEnabled ? (
+        <section className="accountPanel" aria-label="Account and invitations">
+          <div className="profileControls">
+            <label>
+              Display name
+              <input value={profileDisplayName} onChange={(event) => setProfileDisplayName(event.target.value)} />
+            </label>
+            <button onClick={() => void handleProfileSave()} disabled={profileDisplayName.trim() === currentUser.displayName}>
+              Save name
+            </button>
+          </div>
+          <form className="inviteControls" onSubmit={handleInviteSubmit}>
+            <label>
+              Invite by email
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                placeholder="partner@example.com"
+              />
+            </label>
+            <button type="submit" disabled={!inviteEmail.trim()}>
+              Invite
+            </button>
+          </form>
+          {relationshipInvites.length ? (
+            <div className="inviteList">
+              {relationshipInvites.map((invite) => (
+                <div className="inviteItem" key={invite.id}>
+                  <span>{invite.inviterDisplayName} invited you</span>
+                  <button onClick={() => void handleAcceptInvite(invite)}>Accept</button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+      {statusMessage ? <p className={`statusMessage ${statusTone}`}>{statusMessage}</p> : null}
       {cloudEnabled && !selectedUser ? (
-        <p className="statusMessage">
-          No active relationship is available yet. Personal cloud events are enabled; shared events will work after
-          reciprocal rows are added in user_relationships.
+        <p className="statusMessage error">
+          No active relationship is available yet. Invite someone by email or accept a pending invitation to enable
+          shared events.
         </p>
       ) : null}
 

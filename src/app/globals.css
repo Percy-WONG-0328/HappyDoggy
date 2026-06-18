@@ -78,6 +78,29 @@ button {
   color: #ffffff;
 }
 
+.segmentedControl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f1eee7;
+  padding: 4px;
+}
+
+.segmentedControl button {
+  min-height: 34px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.segmentedControl .activeSegment {
+  background: #ffffff;
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
 .loginPanel button:disabled {
   opacity: 0.62;
 }
@@ -92,12 +115,78 @@ button {
   font-size: 0.84rem;
 }
 
+.statusMessage.success {
+  border-color: #9bc7ac;
+  background: #f3fbf6;
+  color: #2f6f49;
+}
+
 .topBar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
   padding: 12px 0 14px;
+}
+
+.accountPanel {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.9fr) minmax(260px, 1.1fr) minmax(220px, 1fr);
+  gap: 10px;
+  align-items: end;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.profileControls,
+.inviteControls,
+.inviteItem {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.accountPanel label {
+  display: grid;
+  flex: 1;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.accountPanel input,
+.accountPanel button {
+  min-height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 0 10px;
+}
+
+.accountPanel button {
+  background: var(--ink);
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.accountPanel button:disabled {
+  opacity: 0.56;
+}
+
+.inviteList {
+  display: grid;
+  gap: 8px;
+}
+
+.inviteItem {
+  justify-content: space-between;
+  min-height: 36px;
+  color: var(--ink);
+  font-size: 0.84rem;
 }
 
 .eyebrow {
@@ -590,6 +679,29 @@ select:disabled {
   .logoutButton {
     grid-column: 2;
     min-width: 48px;
+  }
+
+  .accountPanel {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .profileControls,
+  .inviteControls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .accountPanel input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .accountPanel button {
+    min-height: 34px;
+    padding: 0 9px;
   }
 
   .calendarFrame {
