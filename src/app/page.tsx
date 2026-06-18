@@ -51,6 +51,7 @@ type DragState =
   | {
       kind: "move";
       eventId: string;
+      originalEvent: CalendarEvent;
       originMinutes: number;
       startMinutes: number;
       endMinutes: number;
@@ -58,6 +59,7 @@ type DragState =
   | {
       kind: "resize-start" | "resize-end";
       eventId: string;
+      originalEvent: CalendarEvent;
       originMinutes: number;
       startMinutes: number;
       endMinutes: number;
@@ -66,6 +68,17 @@ type DragState =
 type SaveStatus = "idle" | "saving" | "saved" | "syncing" | "error";
 type AuthMode = "login" | "register";
 type StatusTone = "error" | "success";
+
+type PendingDelete = {
+  event: CalendarEvent;
+  previousEvents: CalendarEvent[];
+  dateKey: string;
+};
+
+type OptimisticSave = {
+  baselineEvents: CalendarEvent[];
+  latestToken: number;
+};
 
 export default function Home() {
   const timezone = getDefaultTimezone();
@@ -91,11 +104,16 @@ export default function Home() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [statusMessage, setStatusMessage] = useState("");
   const [statusTone, setStatusTone] = useState<StatusTone>("error");
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const longPressRef = useRef<number | null>(null);
   const eventsRef = useRef(events);
+  const pendingDeleteRef = useRef<PendingDelete | null>(null);
+  const optimisticSavesRef = useRef(new Map<string, OptimisticSave>());
+  const saveMutationSeqRef = useRef(0);
   const isRefreshingRef = useRef(false);
   const saveStatusTimerRef = useRef<number | null>(null);
+  const deleteTimerRef = useRef<number | null>(null);
 
   const currentUser = appUsers.find((user) => user.id === currentUserId) ?? appUsers[0] ?? mockCurrentUser;
   const selectedUser =
@@ -122,12 +140,17 @@ export default function Home() {
   useEffect(() => {
     return () => {
       if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current);
+      if (deleteTimerRef.current) window.clearTimeout(deleteTimerRef.current);
     };
   }, []);
 
   useEffect(() => {
     eventsRef.current = events;
   }, [events]);
+
+  useEffect(() => {
+    pendingDeleteRef.current = pendingDelete;
+  }, [pendingDelete]);
 
   useEffect(() => {
     if (!cloudEnabled || currentUserId === mockCurrentUser.id) return;
@@ -211,6 +234,52 @@ export default function Home() {
     setStatusMessage(getErrorMessage(error));
   }
 
+  function restoreEvents(previousEvents: CalendarEvent[]) {
+    eventsRef.current = previousEvents;
+    setEvents(previousEvents);
+  }
+
+  function handleRollbackError(error: unknown, previousEvents: CalendarEvent[], fallbackMessage: string) {
+    restoreEvents(previousEvents);
+    markSaveStatus("error");
+    setStatusTone("error");
+    setStatusMessage(`${fallbackMessage} ${getErrorMessage(error)}`);
+  }
+
+  function clearPendingDelete() {
+    if (deleteTimerRef.current) {
+      window.clearTimeout(deleteTimerRef.current);
+      deleteTimerRef.current = null;
+    }
+    pendingDeleteRef.current = null;
+    setPendingDelete(null);
+  }
+
+  function undoDelete() {
+    if (!pendingDelete) return;
+    restoreEvents(pendingDelete.previousEvents);
+    clearPendingDelete();
+    markSaveStatus("saved");
+    setStatusTone("success");
+    setStatusMessage("Delete undone.");
+  }
+
+  function commitPendingDelete(deleteRequest: PendingDelete) {
+    clearPendingDelete();
+    markSaveStatus("saving");
+    deleteCalendarEvent(deleteRequest.event.id)
+      .then(() => {
+        markSaveStatus("saved");
+        return refreshCloudEvents(deleteRequest.dateKey);
+      })
+      .catch((error) => {
+        restoreEvents(deleteRequest.previousEvents);
+        markSaveStatus("error");
+        setStatusTone("error");
+        setStatusMessage(`Delete failed. The event was restored. ${getErrorMessage(error)}`);
+      });
+  }
+
   async function bootstrapCloudSession() {
     setIsLoading(true);
     setStatusTone("error");
@@ -260,9 +329,13 @@ export default function Home() {
     markSaveStatus("syncing");
 
     try {
-      const cloudEvents = await fetchEventsForDate(nextDateKey, timezone);
+      const pendingDeletedEvent = pendingDeleteRef.current;
+      const cloudEvents = (await fetchEventsForDate(nextDateKey, timezone)).filter(
+        (event) => pendingDeletedEvent?.dateKey !== nextDateKey || event.id !== pendingDeletedEvent.event.id
+      );
       setEvents(cloudEvents);
       eventsRef.current = cloudEvents;
+      optimisticSavesRef.current.clear();
       markSaveStatus("saved");
     } catch (error) {
       markSaveStatus("error");
@@ -300,6 +373,7 @@ export default function Home() {
 
   async function handleLogout() {
     if (!cloudEnabled) return;
+    if (pendingDelete) commitPendingDelete(pendingDelete);
     await signOut();
     setCurrentUserId(mockCurrentUser.id);
     setAppUsers(mockUsers);
@@ -360,6 +434,7 @@ export default function Home() {
   }
 
   async function resetDay(nextDateKey: string) {
+    if (pendingDelete) commitPendingDelete(pendingDelete);
     setDateKey(nextDateKey);
     setDraft(null);
     setEditingEventId(null);
@@ -465,6 +540,7 @@ export default function Home() {
 
     if (dragState && dragState.kind !== "create") {
       persistEvent(dragState.eventId, {
+        rollbackEvent: dragState.originalEvent,
         syncParticipants: false,
         refreshAfterSave: true
       });
@@ -486,6 +562,7 @@ export default function Home() {
         "relationship",
         participantUserIds
       );
+      const previousEvents = eventsRef.current;
       setEvents((current) => [...current, event]);
       eventsRef.current = [...eventsRef.current, event];
 
@@ -498,7 +575,10 @@ export default function Home() {
             setEditingEventId(event.id);
             return refreshCloudEvents(dateKey);
           })
-          .catch(handleCloudError);
+          .catch((error) => {
+            setEditingEventId(null);
+            handleRollbackError(error, previousEvents, "Create failed. The event was removed.");
+          });
       } else {
         setEditingEventId(event.id);
       }
@@ -511,12 +591,15 @@ export default function Home() {
 
   function persistEvent(
     eventId: string,
-    options: { syncParticipants?: boolean; refreshAfterSave?: boolean } = {}
+    options: { rollbackEvent?: CalendarEvent; syncParticipants?: boolean; refreshAfterSave?: boolean } = {}
   ) {
     if (!cloudEnabled) return;
 
     const event = eventsRef.current.find((eventItem) => eventItem.id === eventId);
     if (!event) return;
+    const previousEvents = options.rollbackEvent
+      ? eventsRef.current.map((eventItem) => (eventItem.id === eventId ? options.rollbackEvent as CalendarEvent : eventItem))
+      : eventsRef.current;
 
     markSaveStatus("saving");
     updateCalendarEvent(event, {
@@ -527,7 +610,7 @@ export default function Home() {
         if (options.refreshAfterSave) return refreshCloudEvents(dateKey);
         return undefined;
       })
-      .catch(handleCloudError);
+      .catch((error) => handleRollbackError(error, previousEvents, "Save failed. Changes were restored."));
   }
 
   function updateEventTime(eventId: string, startMinutes: number, endMinutes: number, persist = true) {
@@ -564,17 +647,36 @@ export default function Home() {
     }
 
     const changedEvent = updater(existingEvent);
+    const previousEvents = eventsRef.current;
     const nextEvents = eventsRef.current.map((event) => (event.id === eventId ? changedEvent : event));
     eventsRef.current = nextEvents;
     setEvents(nextEvents);
 
     if (cloudEnabled && options.persist !== false) {
+      const token = saveMutationSeqRef.current + 1;
+      saveMutationSeqRef.current = token;
+      const activeSave = optimisticSavesRef.current.get(eventId);
+      optimisticSavesRef.current.set(eventId, {
+        baselineEvents: activeSave?.baselineEvents ?? previousEvents,
+        latestToken: token
+      });
+
       markSaveStatus("saving");
       updateCalendarEvent(changedEvent, {
         syncParticipants: options.syncParticipants && changedEvent.ownerUserId === currentUser.id
       })
-        .then(() => markSaveStatus("saved"))
-        .catch(handleCloudError);
+        .then(() => {
+          const latestSave = optimisticSavesRef.current.get(eventId);
+          if (latestSave?.latestToken !== token) return;
+          optimisticSavesRef.current.delete(eventId);
+          markSaveStatus("saved");
+        })
+        .catch((error) => {
+          const latestSave = optimisticSavesRef.current.get(eventId);
+          if (latestSave?.latestToken !== token) return;
+          optimisticSavesRef.current.delete(eventId);
+          handleRollbackError(error, latestSave.baselineEvents, "Save failed. Changes were restored.");
+        });
     }
   }
 
@@ -588,18 +690,22 @@ export default function Home() {
       return;
     }
 
-    setEvents((current) => current.filter((event) => event.id !== eventId));
-    eventsRef.current = eventsRef.current.filter((event) => event.id !== eventId);
+    if (pendingDelete) commitPendingDelete(pendingDelete);
+
+    const previousEvents = eventsRef.current;
+    const nextEvents = eventsRef.current.filter((event) => event.id !== eventId);
+    const deleteRequest = { event: eventToDelete, previousEvents, dateKey };
+
+    restoreEvents(nextEvents);
     setEditingEventId(null);
 
     if (cloudEnabled) {
-      markSaveStatus("saving");
-      deleteCalendarEvent(eventId)
-        .then(() => {
-          markSaveStatus("saved");
-          return refreshCloudEvents(dateKey);
-        })
-        .catch(handleCloudError);
+      pendingDeleteRef.current = deleteRequest;
+      setPendingDelete(deleteRequest);
+      markSaveStatus("saved");
+      setStatusTone("success");
+      setStatusMessage("Event deleted.");
+      deleteTimerRef.current = window.setTimeout(() => commitPendingDelete(deleteRequest), 6000);
     }
   }
 
@@ -770,7 +876,9 @@ export default function Home() {
           ) : null}
         </section>
       ) : null}
-      {statusMessage ? <p className={`statusMessage ${statusTone}`}>{statusMessage}</p> : null}
+      {statusMessage ? (
+        <StatusMessage tone={statusTone} message={statusMessage} showUndo={Boolean(pendingDelete)} onUndo={undoDelete} />
+      ) : null}
       {cloudEnabled && !selectedUser ? (
         <p className="statusMessage error">
           No active relationship is available yet. Invite someone by email or accept a pending invitation to enable
@@ -859,6 +967,7 @@ export default function Home() {
                   setDragState({
                     kind: mode,
                     eventId: segment.event.id,
+                    originalEvent: segment.event,
                     originMinutes: pointerMinutes,
                     startMinutes: segment.startMinutes,
                     endMinutes: segment.endMinutes
@@ -934,6 +1043,29 @@ function DraftBlock({ draft }: { draft: DraftRange }) {
   return (
     <div className={`draftBlock ${draft.lane}`} style={getDraftStyle(draft)}>
       {formatTime(draft.startMinutes)}-{formatTime(draft.endMinutes)}
+    </div>
+  );
+}
+
+function StatusMessage({
+  tone,
+  message,
+  showUndo,
+  onUndo
+}: {
+  tone: StatusTone;
+  message: string;
+  showUndo: boolean;
+  onUndo: () => void;
+}) {
+  return (
+    <div className={`statusMessage ${tone}`}>
+      <span>{message}</span>
+      {showUndo ? (
+        <button type="button" onClick={onUndo}>
+          Undo
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -115,6 +115,23 @@ button {
   font-size: 0.84rem;
 }
 
+div.statusMessage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.statusMessage button {
+  min-height: 30px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  padding: 0 10px;
+  font-weight: 650;
+}
+
 .statusMessage.success {
   border-color: #9bc7ac;
   background: #f3fbf6;
