@@ -1033,7 +1033,7 @@ export default function Home() {
           canManageParticipants={editingEvent.ownerUserId === currentUser.id}
           onClose={() => setEditingEventId(null)}
           onDelete={() => deleteEvent(editingEvent.id)}
-          onChange={(patch) => updateEvent(editingEvent.id, patch)}
+          onSave={(draftEvent) => updateEvent(editingEvent.id, draftEvent)}
         />
       ) : null}
     </main>

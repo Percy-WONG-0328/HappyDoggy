@@ -559,6 +559,8 @@ h2 {
 }
 
 .dayCreateActions {
+  position: relative;
+  z-index: 15;
   width: min(520px, 100%);
   display: flex;
   gap: 9px;
@@ -566,6 +568,7 @@ h2 {
 }
 
 .dayCreateActions button {
+  -webkit-tap-highlight-color: transparent;
   flex: 1;
   min-height: 44px;
   border: 0;
@@ -1287,7 +1290,14 @@ h2 {
   position: relative;
   overflow: hidden;
   touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
   background: var(--paper-card);
+}
+
+.timeline * {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .timeline::before,
@@ -1545,13 +1555,16 @@ h2 {
 .editorActions .danger {
   flex: none;
   width: 54px;
+  display: inline-grid;
+  place-items: center;
   border-radius: 50%;
   font-size: 0;
 }
 
-.editorActions .danger::before {
-  content: "Del";
-  font-size: 0.9rem;
+.editorActions .danger svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
 }
 
 .editorActions button:last-child {

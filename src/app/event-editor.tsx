@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { CalendarEvent, CalendarUser } from "@/types/calendar";
 import { categories, colors } from "@/lib/mockData";
 
@@ -11,7 +12,7 @@ export function EventEditor({
   canManageParticipants,
   onClose,
   onDelete,
-  onChange
+  onSave
 }: {
   event: CalendarEvent;
   selectedUser: CalendarUser | null;
@@ -20,9 +21,21 @@ export function EventEditor({
   canManageParticipants: boolean;
   onClose: () => void;
   onDelete: () => void;
-  onChange: (patch: Partial<CalendarEvent>) => void;
+  onSave: (event: CalendarEvent) => void;
 }) {
-  const isShared = selectedUser ? event.participantUserIds.includes(selectedUser.id) : false;
+  const [draftEvent, setDraftEvent] = useState(event);
+  const isShared = selectedUser ? draftEvent.participantUserIds.includes(selectedUser.id) : false;
+
+  useEffect(() => {
+    setDraftEvent(event);
+  }, [event]);
+
+  function updateDraft(patch: Partial<CalendarEvent>) {
+    setDraftEvent((currentEvent) => ({
+      ...currentEvent,
+      ...patch
+    }));
+  }
 
   return (
     <div className="modalLayer" role="dialog" aria-modal="true">
@@ -37,18 +50,18 @@ export function EventEditor({
         <label>
           Title
           <input
-            value={event.title}
+            value={draftEvent.title}
             disabled={!canEdit}
-            onChange={(change) => onChange({ title: change.target.value })}
+            onChange={(change) => updateDraft({ title: change.target.value })}
           />
         </label>
 
         <label>
           Category
           <select
-            value={event.category}
+            value={draftEvent.category}
             disabled={!canEdit}
-            onChange={(change) => onChange({ category: change.target.value as CalendarEvent["category"] })}
+            onChange={(change) => updateDraft({ category: change.target.value as CalendarEvent["category"] })}
           >
             {categories.map((category) => (
               <option key={category}>{category}</option>
@@ -63,11 +76,11 @@ export function EventEditor({
               <button
                 type="button"
                 aria-label={`Set color ${color}`}
-                className={event.color === color ? "selectedSwatch" : ""}
+                className={draftEvent.color === color ? "selectedSwatch" : ""}
                 style={{ background: color }}
                 key={color}
                 disabled={!canEdit}
-                onClick={() => onChange({ color })}
+                onClick={() => updateDraft({ color })}
               />
             ))}
           </div>
@@ -76,9 +89,9 @@ export function EventEditor({
         <label className="checkboxLine">
           <input
             type="checkbox"
-            checked={event.visibility === "private"}
+            checked={draftEvent.visibility === "private"}
             disabled={!canEdit}
-            onChange={(change) => onChange({ visibility: change.target.checked ? "private" : "relationship" })}
+            onChange={(change) => updateDraft({ visibility: change.target.checked ? "private" : "relationship" })}
           />
           Private
         </label>
@@ -89,7 +102,7 @@ export function EventEditor({
               type="checkbox"
               checked={isShared}
               onChange={(change) =>
-                onChange({
+                updateDraft({
                   participantUserIds: change.target.checked ? [selectedUser.id] : []
                 })
               }
@@ -99,11 +112,20 @@ export function EventEditor({
         ) : null}
 
         <div className="editorActions">
-          <button type="button" className="danger" onClick={onDelete} disabled={!canDelete}>
-            Delete
+          <button type="button" className="danger" aria-label="Delete event" onClick={onDelete} disabled={!canDelete}>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M9 3h6l1 2h4v2H4V5h4l1-2Z" />
+              <path d="M6 9h12l-1 11H7L6 9Zm4 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z" />
+            </svg>
           </button>
-          <button type="button" onClick={onClose}>
-            Save
+          <button
+            type="button"
+            onClick={() => {
+              onSave(draftEvent);
+              onClose();
+            }}
+          >
+            Save with love
           </button>
         </div>
       </form>
