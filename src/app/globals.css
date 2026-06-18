@@ -1390,24 +1390,32 @@ h2 {
 .draftBlock {
   position: absolute;
   z-index: 5;
-  border: 1px solid transparent !important;
   border-left-width: 0 !important;
   border-radius: var(--r-card-sm);
   overflow: hidden;
   box-shadow: 0 8px 18px -15px rgba(58, 52, 44, 0.45);
 }
 
+.eventBlock {
+  border: 1px solid transparent;
+  border-left-width: 0;
+}
+
+.draftBlock {
+  border: 1px solid transparent !important;
+}
+
 .eventBlock.current {
-  background: var(--guava-tint) !important;
+  background: var(--guava-tint);
 }
 
 .eventBlock.selected {
-  background: var(--sage-tint) !important;
+  background: var(--sage-tint);
 }
 
 .eventBlock.shared {
   z-index: 6;
-  background: var(--slate-tint) !important;
+  background: var(--slate-tint);
 }
 
 .eventBlock:not(.readOnly),

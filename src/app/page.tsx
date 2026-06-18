@@ -1006,24 +1006,26 @@ export default function Home() {
             </section>
           </div>
 
-          <div className="dayCreateActions" aria-label="Create event">
-            <button
-              type="button"
-              className={mobileCreateLane === "current" ? "activeCreate" : ""}
-              onClick={() => setMobileCreateLane((lane) => (lane === "current" ? null : "current"))}
-            >
-              + Add for me
-            </button>
-            {selectedUser ? (
+          {editingEvent ? null : (
+            <div className="dayCreateActions" aria-label="Create event">
               <button
                 type="button"
-                className={mobileCreateLane === "shared" ? "activeCreate" : ""}
-                onClick={() => setMobileCreateLane((lane) => (lane === "shared" ? null : "shared"))}
+                className={mobileCreateLane === "current" ? "activeCreate" : ""}
+                onClick={() => setMobileCreateLane((lane) => (lane === "current" ? null : "current"))}
               >
-                + For both
+                + Add for me
               </button>
-            ) : null}
-          </div>
+              {selectedUser ? (
+                <button
+                  type="button"
+                  className={mobileCreateLane === "shared" ? "activeCreate" : ""}
+                  onClick={() => setMobileCreateLane((lane) => (lane === "shared" ? null : "shared"))}
+                >
+                  + For both
+                </button>
+              ) : null}
+            </div>
+          )}
         </>
       )}
 
