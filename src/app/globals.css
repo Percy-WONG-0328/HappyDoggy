@@ -1536,12 +1536,12 @@ h2 {
 .editor {
   width: min(440px, 100%);
   display: grid;
-  gap: 15px;
+  gap: 0;
   border: 1px solid var(--line);
   border-radius: var(--r-sheet) var(--r-sheet) var(--r-card) var(--r-card);
   background: var(--paper-sheet);
   box-shadow: var(--shadow-sheet);
-  padding: 14px 18px 18px;
+  padding: 14px 18px 0;
 }
 
 .editor::before {
@@ -1562,41 +1562,58 @@ h2 {
   gap: 12px;
 }
 
+.editorHeader {
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(58, 52, 44, 0.07);
+  padding-bottom: 14px;
+}
+
+.editorField {
+  margin-bottom: 20px !important;
+}
+
 .editorActionRow button {
   min-height: 54px;
 }
 
 .editorToggleRow {
+  display: grid;
+  gap: 0;
   align-items: stretch;
+  margin-bottom: 14px;
+  border-top: 1px solid rgba(58, 52, 44, 0.07);
+  border-bottom: 1px solid rgba(58, 52, 44, 0.07);
+  padding: 4px 0;
 }
 
 .editorSwitchLine {
-  flex: 1;
+  width: 100%;
   min-width: 0;
-  min-height: 54px;
+  min-height: 64px;
   display: flex !important;
   align-items: center;
   justify-content: space-between;
-  gap: 10px !important;
-  border: 1px solid var(--line);
-  border-radius: var(--r-input);
-  background: var(--paper-card);
+  gap: 16px !important;
+  border-bottom: 1px solid rgba(58, 52, 44, 0.06);
   color: var(--ink-800) !important;
   font-family: var(--font-serif) !important;
   font-size: 1.02rem !important;
   letter-spacing: 0 !important;
-  padding: 0 12px !important;
+  padding: 10px 0 !important;
   text-transform: none !important;
+}
+
+.editorSwitchLine:last-child {
+  border-bottom: 0;
 }
 
 .editorSwitchLine > span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .editorSwitch {
+  flex: none;
   width: 56px;
   min-width: 56px;
   min-height: 44px !important;
@@ -1649,6 +1666,15 @@ h2 {
   font-weight: 600;
 }
 
+.editorActionRow {
+  position: sticky;
+  bottom: 0;
+  margin: 0 -18px;
+  border-top: 1px solid rgba(58, 52, 44, 0.07);
+  background: var(--paper-sheet);
+  padding: 14px 18px 24px;
+}
+
 .editorHeader button {
   width: 44px;
   min-height: 44px;
@@ -1671,25 +1697,24 @@ h2 {
 }
 
 .swatches {
-  display: grid;
-  grid-template-columns: repeat(6, 44px);
-  gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .swatches button {
-  width: 44px;
-  min-height: 44px;
-  border: 2px solid var(--paper-sheet);
+  width: 40px;
+  min-height: 40px;
+  border: 0;
   border-radius: 50%;
   padding: 0;
   box-shadow: var(--shadow-card);
 }
 
 .swatches .selectedSwatch {
-  box-shadow:
-    0 0 0 3px var(--paper-card),
-    0 0 0 5px var(--ink-800);
-  transform: scale(1.08);
+  outline: 2px solid #8B7355;
+  outline-offset: 3px;
 }
 
 .danger {
@@ -1902,7 +1927,7 @@ h2 {
     border-bottom: 0;
     border-left: 0;
     border-radius: var(--r-sheet) var(--r-sheet) 0 0;
-    padding: 12px 16px max(18px, env(safe-area-inset-bottom));
+    padding: 12px 16px 0;
   }
 
   .editorHeader {
@@ -1910,15 +1935,21 @@ h2 {
     top: 0;
     z-index: 1;
     background: var(--paper-sheet);
-    padding-bottom: 4px;
+    padding-bottom: 14px;
   }
 
   .swatches {
-    grid-template-columns: repeat(6, minmax(34px, 1fr));
+    display: flex;
   }
 
   .swatches button {
-    width: 100%;
-    border-radius: var(--r-input);
+    width: 40px;
+    min-height: 40px;
+    border-radius: 50%;
+  }
+
+  .editorActionRow {
+    margin: 0 -16px;
+    padding: 14px 16px 24px;
   }
 }

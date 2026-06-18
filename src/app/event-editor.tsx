@@ -61,7 +61,7 @@ export function EventEditor({
           </button>
         </div>
 
-        <label>
+        <label className="editorField">
           Title
           <input
             value={draftTitle}
@@ -70,7 +70,7 @@ export function EventEditor({
           />
         </label>
 
-        <label>
+        <label className="editorField">
           Category
           <select
             value={draftCategory}
@@ -83,7 +83,7 @@ export function EventEditor({
           </select>
         </label>
 
-        <fieldset>
+        <fieldset className="editorField editorColorField">
           <legend>Color</legend>
           <div className="swatches">
             {colors.map((color) => (
