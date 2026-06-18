@@ -1390,7 +1390,6 @@ h2 {
 .draftBlock {
   position: absolute;
   z-index: 5;
-  border-left-width: 0 !important;
   border-radius: var(--r-card-sm);
   overflow: hidden;
   box-shadow: 0 8px 18px -15px rgba(58, 52, 44, 0.45);
@@ -1398,7 +1397,6 @@ h2 {
 
 .eventBlock {
   border: 1px solid transparent;
-  border-left-width: 0;
 }
 
 .draftBlock {
