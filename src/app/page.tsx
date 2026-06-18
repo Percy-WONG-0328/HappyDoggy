@@ -37,6 +37,7 @@ import { StatusMessage, type StatusTone } from "./status-message";
 const PIXELS_PER_MINUTE = 1.15;
 const DAY_HEIGHT = 1440 * PIXELS_PER_MINUTE;
 const MIN_EVENT_MINUTES = 15;
+const GRID_INTERVAL_MINUTES = 15;
 
 type DraftRange = {
   lane: RenderLane;
@@ -69,6 +70,7 @@ type DragState =
 
 type SaveStatus = "idle" | "saving" | "saved" | "syncing" | "error";
 type AuthMode = "login" | "register";
+type AppView = "day" | "week" | "profile";
 
 type PendingDelete = {
   event: CalendarEvent;
@@ -97,9 +99,11 @@ export default function Home() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authDisplayName, setAuthDisplayName] = useState("");
+  const [appView, setAppView] = useState<AppView>("day");
   const [profileDisplayName, setProfileDisplayName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [relationshipInvites, setRelationshipInvites] = useState<RelationshipInvite[]>([]);
+  const [weekEvents, setWeekEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(cloudEnabled);
   const [isSyncing, setIsSyncing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -128,6 +132,12 @@ export default function Home() {
   );
   const laidOutSegments = useMemo(() => layoutSegments(visible.segments), [visible.segments]);
   const editingEvent = editingEventId ? events.find((event) => event.id === editingEventId) ?? null : null;
+  const weekDates = useMemo(() => getWeekDates(dateKey), [dateKey]);
+  const headerEyebrow = useMemo(() => formatHeaderEyebrow(dateKey, timezone), [dateKey, timezone]);
+  const displayedWeekEvents = useMemo(
+    () => (cloudEnabled ? weekEvents : weekDates.flatMap((weekDate) => createMockEvents(weekDate))),
+    [cloudEnabled, weekDates, weekEvents]
+  );
 
   useEffect(() => {
     setProfileDisplayName(currentUser.displayName);
@@ -157,6 +167,11 @@ export default function Home() {
     if (!cloudEnabled || currentUserId === mockCurrentUser.id) return;
     refreshCloudEvents(dateKey).catch(handleCloudError);
   }, [cloudEnabled, currentUserId, dateKey, timezone]);
+
+  useEffect(() => {
+    if (!cloudEnabled || currentUserId === mockCurrentUser.id || appView !== "week") return;
+    refreshWeekEvents().catch(handleCloudError);
+  }, [appView, cloudEnabled, currentUserId, dateKey, timezone]);
 
   useEffect(() => {
     if (!cloudEnabled || currentUserId === mockCurrentUser.id) return;
@@ -293,9 +308,12 @@ export default function Home() {
         return;
       }
 
+      const todayKey = getLocalDateKey(new Date(), timezone);
+      setAppView("day");
+      setDateKey(todayKey);
       setCurrentUserId(sessionUser.id);
       await refreshAccountContext(sessionUser.id);
-      await refreshCloudEvents(dateKey);
+      await refreshCloudEvents(todayKey);
     } catch (error) {
       handleCloudError(error);
     } finally {
@@ -343,6 +361,32 @@ export default function Home() {
       throw error;
     } finally {
       isRefreshingRef.current = false;
+      setIsSyncing(false);
+    }
+  }
+
+  async function refreshWeekEvents() {
+    if (!cloudEnabled) return;
+
+    setIsSyncing(true);
+    markSaveStatus("syncing");
+
+    try {
+      const pendingDeletedEvent = pendingDeleteRef.current;
+      const eventGroups = await Promise.all(weekDates.map((weekDate) => fetchEventsForDate(weekDate, timezone)));
+      const deduped = new Map<string, CalendarEvent>();
+
+      for (const event of eventGroups.flat()) {
+        if (pendingDeletedEvent?.event.id === event.id) continue;
+        deduped.set(event.id, event);
+      }
+
+      setWeekEvents(Array.from(deduped.values()).sort((a, b) => a.startAt.localeCompare(b.startAt)));
+      markSaveStatus("saved");
+    } catch (error) {
+      markSaveStatus("error");
+      throw error;
+    } finally {
       setIsSyncing(false);
     }
   }
@@ -774,119 +818,105 @@ export default function Home() {
 
   return (
     <main className="appShell">
-      <header className="topBar">
-        <div>
-          <p className="eyebrow">{cloudEnabled ? "HappyDoggy Phase 3" : "HappyDoggy Phase 1"}</p>
-          <h1>{formatDateLabel(dateKey)}</h1>
-        </div>
-        <div className="toolbar">
-          <div className="dateControls">
-            <button aria-label="Previous day" onClick={() => void resetDay(addDays(dateKey, -1))}>
-              &lt;
+      {appView !== "profile" ? (
+        <header className="dayHeader">
+          <div className="comparisonBar">
+            <p className="compareLine">
+              <button
+                className="compareAvatar"
+                type="button"
+                aria-label="Open profile"
+                onClick={() => setAppView("profile")}
+              >
+                {currentUser.displayName.slice(0, 1).toUpperCase()}
             </button>
-            <input value={dateKey} type="date" onChange={(event) => void resetDay(event.target.value)} />
-            <button onClick={() => void resetDay(getLocalDateKey(new Date(), timezone))}>Today</button>
-            <button aria-label="Next day" onClick={() => void resetDay(addDays(dateKey, 1))}>
+            Comparing with <em>{selectedUser?.displayName ?? "no one yet"}</em>
+          </p>
+          <div className={`compactViewToggle ${appView === "week" ? "weekActive" : ""}`} aria-label="Calendar view">
+            <span className="toggleIndicator" />
+            <button type="button" aria-pressed={appView === "day"} onClick={() => setAppView("day")}>
+              Day
+            </button>
+            <button type="button" aria-pressed={appView === "week"} onClick={() => setAppView("week")}>
+              Week
+            </button>
+          </div>
+        </div>
+        <div className="navigationBar">
+            <div className="navSide navSideLeft">
+              <button className="circleNavButton" aria-label="Previous day" onClick={() => void resetDay(addDays(dateKey, -1))}>
+                &lt;
+              </button>
+            </div>
+            <div className="dateNav" aria-label="Current date">
+              <div className="dateStack">
+                <p className="eyebrow">{headerEyebrow}</p>
+                <h1>{formatDateLabel(dateKey)}</h1>
+              </div>
+            </div>
+          <div className="navSide navSideRight">
+            <button className="circleNavButton" aria-label="Next day" onClick={() => void resetDay(addDays(dateKey, 1))}>
               &gt;
             </button>
           </div>
-          <select
-            value={selectedUserId}
-            onChange={(event) => setSelectedUserId(event.target.value)}
-            disabled={appUsers.filter((user) => user.id !== currentUser.id).length === 0}
-          >
-            {appUsers.filter((user) => user.id !== currentUser.id).length === 0 ? (
-              <option value="">No active relationships</option>
-            ) : (
-              appUsers
-                .filter((user) => user.id !== currentUser.id)
-                .map((user) => (
-                  <option value={user.id} key={user.id}>
-                    Compare: {user.displayName}
-                  </option>
-                ))
-            )}
-          </select>
-          <div className="mobileCreateActions" aria-label="Mobile create mode">
-            <button
-              className={mobileCreateLane === "current" ? "activeCreate" : ""}
-              onClick={() => setMobileCreateLane((lane) => (lane === "current" ? null : "current"))}
-            >
-              + Me
-            </button>
-            {selectedUser ? (
-              <button
-                className={mobileCreateLane === "shared" ? "activeCreate" : ""}
-                onClick={() => setMobileCreateLane((lane) => (lane === "shared" ? null : "shared"))}
-              >
-                + Both
-              </button>
-            ) : null}
-          </div>
-          {cloudEnabled ? (
-            <span className={`syncBadge ${saveStatus}`}>{getSaveStatusLabel(saveStatus)}</span>
-          ) : null}
-          {cloudEnabled ? (
-            <button className="syncButton" onClick={() => refreshCloudEvents(dateKey).catch(handleCloudError)}>
-              {isSyncing ? "Syncing..." : "Sync"}
-            </button>
-          ) : null}
-          {cloudEnabled ? (
-            <button className="logoutButton" onClick={() => void handleLogout()}>
-              Logout
-            </button>
-          ) : (
-            <button>Mock mode</button>
-          )}
         </div>
-      </header>
-      {cloudEnabled ? (
-        <section className="accountPanel" aria-label="Account and invitations">
-          <div className="profileControls">
-            <label>
-              Display name
-              <input value={profileDisplayName} onChange={(event) => setProfileDisplayName(event.target.value)} />
-            </label>
-            <button onClick={() => void handleProfileSave()} disabled={profileDisplayName.trim() === currentUser.displayName}>
-              Save name
-            </button>
-          </div>
-          <form className="inviteControls" onSubmit={handleInviteSubmit}>
-            <label>
-              Invite by email
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                placeholder="partner@example.com"
-              />
-            </label>
-            <button type="submit" disabled={!inviteEmail.trim()}>
-              Invite
-            </button>
-          </form>
-          {relationshipInvites.length ? (
-            <div className="inviteList">
-              {relationshipInvites.map((invite) => (
-                <div className="inviteItem" key={invite.id}>
-                  <span>{invite.inviterDisplayName} invited you</span>
-                  <button onClick={() => void handleAcceptInvite(invite)}>Accept</button>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </section>
+        </header>
       ) : null}
       {statusMessage ? (
         <StatusMessage tone={statusTone} message={statusMessage} showUndo={Boolean(pendingDelete)} onUndo={undoDelete} />
       ) : null}
-      {cloudEnabled && !selectedUser ? (
+      {appView !== "profile" && cloudEnabled && !selectedUser ? (
         <p className="statusMessage error">
-          No active relationship is available yet. Invite someone by email or accept a pending invitation to enable
-          shared events.
+          No active relationship is available yet. Shared events will appear after you connect with someone.
         </p>
       ) : null}
 
+      {appView === "profile" ? (
+        <ProfileView
+          currentUser={currentUser}
+          selectedUser={selectedUser}
+          profileDisplayName={profileDisplayName}
+          inviteEmail={inviteEmail}
+          relationshipInvites={relationshipInvites}
+          cloudEnabled={cloudEnabled}
+          sharedThisWeek={countSharedEvents(displayedWeekEvents, currentUser, selectedUser)}
+          onProfileDisplayNameChange={setProfileDisplayName}
+          onInviteEmailChange={setInviteEmail}
+          onProfileSave={() => void handleProfileSave()}
+          onInviteSubmit={handleInviteSubmit}
+          onAcceptInvite={(invite) => void handleAcceptInvite(invite)}
+          onBack={() => setAppView("day")}
+          onSignOut={() => void handleLogout()}
+        />
+      ) : appView === "week" ? (
+        <WeekView
+          dates={weekDates}
+          events={displayedWeekEvents}
+          currentDateKey={dateKey}
+          currentUser={currentUser}
+          selectedUser={comparisonUser}
+          timezone={timezone}
+        />
+      ) : (
+        <>
+      <div className="dayCreateActions" aria-label="Create event">
+        <button
+          type="button"
+          className={mobileCreateLane === "current" ? "activeCreate" : ""}
+          onClick={() => setMobileCreateLane((lane) => (lane === "current" ? null : "current"))}
+        >
+          + Add for me
+        </button>
+        {selectedUser ? (
+          <button
+            type="button"
+            className={mobileCreateLane === "shared" ? "activeCreate" : ""}
+            onClick={() => setMobileCreateLane((lane) => (lane === "shared" ? null : "shared"))}
+          >
+            + For both
+          </button>
+        ) : null}
+      </div>
       <section className="allDayStrip" aria-label="All day events">
         <span>All day</span>
         <div>
@@ -934,9 +964,18 @@ export default function Home() {
           }}
         >
           <div className="hourLines">
-            {Array.from({ length: 25 }, (_, hour) => (
-              <span key={hour} style={{ top: hour * 60 * PIXELS_PER_MINUTE }} />
-            ))}
+            {Array.from({ length: 1440 / GRID_INTERVAL_MINUTES + 1 }, (_, slot) => {
+              const minutes = slot * GRID_INTERVAL_MINUTES;
+              const isHour = minutes % 60 === 0;
+
+              return (
+                <span
+                  className={isHour ? "hourLine" : "quarterLine"}
+                  key={minutes}
+                  style={{ top: minutes * PIXELS_PER_MINUTE }}
+                />
+              );
+            })}
           </div>
 
           <div className="emptyLayer laneCurrent" onPointerDown={(event) => handleEmptyPointerDown(event, "current")} />
@@ -979,6 +1018,8 @@ export default function Home() {
           })}
         </div>
       </section>
+        </>
+      )}
 
       {editingEvent ? (
         <EventEditor
@@ -993,6 +1034,240 @@ export default function Home() {
         />
       ) : null}
     </main>
+  );
+}
+
+function ProfileView({
+  currentUser,
+  selectedUser,
+  profileDisplayName,
+  inviteEmail,
+  relationshipInvites,
+  cloudEnabled,
+  sharedThisWeek,
+  onProfileDisplayNameChange,
+  onInviteEmailChange,
+  onProfileSave,
+  onInviteSubmit,
+  onAcceptInvite,
+  onBack,
+  onSignOut
+}: {
+  currentUser: CalendarUser;
+  selectedUser: CalendarUser | null;
+  profileDisplayName: string;
+  inviteEmail: string;
+  relationshipInvites: RelationshipInvite[];
+  cloudEnabled: boolean;
+  sharedThisWeek: number;
+  onProfileDisplayNameChange: (value: string) => void;
+  onInviteEmailChange: (value: string) => void;
+  onProfileSave: () => void;
+  onInviteSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onAcceptInvite: (invite: RelationshipInvite) => void;
+  onBack: () => void;
+  onSignOut: () => void;
+}) {
+  const initial = currentUser.displayName.slice(0, 1).toLowerCase() || "h";
+  const partnerInitial = selectedUser?.displayName.slice(0, 1).toUpperCase() || "?";
+
+  return (
+    <section className="profilePage" aria-label="Profile">
+      <button className="profileBackButton" type="button" onClick={onBack}>
+        <span aria-hidden="true">&lsaquo;</span>
+        Calendar
+      </button>
+      <div className="profileHero">
+        <div className="profileAvatar">{initial}</div>
+        <h2>{currentUser.displayName}</h2>
+        <p>@{currentUser.email.split("@")[0]}</p>
+      </div>
+
+      <div className="pairingCard">
+        <p className="profileEyebrow">paired</p>
+        <div className="pairingMain">
+          <div className="pairAvatars" aria-hidden="true">
+            <span>{initial}</span>
+            <span>{partnerInitial}</span>
+          </div>
+          <div>
+            <h3>{selectedUser ? `${currentUser.displayName} & ${selectedUser.displayName}` : "Waiting for your person"}</h3>
+            <p>{selectedUser ? "connected in HappyDoggy" : "send or accept an invite to begin"}</p>
+          </div>
+        </div>
+        <div className="pairStats">
+          <div>
+            <strong>{selectedUser ? "Active" : "Open"}</strong>
+            <span>relationship</span>
+          </div>
+          <div>
+            <strong>{sharedThisWeek}</strong>
+            <span>shared this week</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="profilePanel">
+        <div className="profileControls">
+          <label>
+            Display name
+            <input value={profileDisplayName} onChange={(event) => onProfileDisplayNameChange(event.target.value)} />
+          </label>
+          <button onClick={onProfileSave} disabled={!cloudEnabled || profileDisplayName.trim() === currentUser.displayName}>
+            Save name
+          </button>
+        </div>
+
+        <form className="inviteControls" onSubmit={onInviteSubmit}>
+          <label>
+            Invite by email
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(event) => onInviteEmailChange(event.target.value)}
+              placeholder="partner@example.com"
+            />
+          </label>
+          <button type="submit" disabled={!cloudEnabled || !inviteEmail.trim()}>
+            Invite
+          </button>
+        </form>
+
+        {relationshipInvites.length ? (
+          <div className="inviteList">
+            {relationshipInvites.map((invite) => (
+              <div className="inviteItem" key={invite.id}>
+                <span>{invite.inviterDisplayName} invited you</span>
+                <button onClick={() => onAcceptInvite(invite)}>Accept</button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="settingsList" aria-label="Settings">
+        <button type="button">
+          <span><i className="dotGuava" />Categories & colors</span>
+          <b>›</b>
+        </button>
+        <button type="button">
+          <span><i className="dotSage" />Notifications</span>
+          <b>›</b>
+        </button>
+        <button type="button">
+          <span><i className="dotSlate" />Calendar sync</span>
+          <b>›</b>
+        </button>
+        <button type="button">
+          <span><i className="dotGold" />Account & privacy</span>
+          <b>›</b>
+        </button>
+      </div>
+
+      {cloudEnabled ? (
+        <button className="signOutText" type="button" onClick={onSignOut}>
+          Sign out
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+function WeekView({
+  dates,
+  events,
+  currentDateKey,
+  currentUser,
+  selectedUser,
+  timezone
+}: {
+  dates: string[];
+  events: CalendarEvent[];
+  currentDateKey: string;
+  currentUser: CalendarUser;
+  selectedUser: CalendarUser;
+  timezone: string;
+}) {
+  const weekLabel = `${formatShortDate(dates[0])} - ${formatShortDate(dates[6])}`;
+  const sharedCount = countSharedEvents(events, currentUser, selectedUser);
+  const startMinute = 6 * 60;
+  const endMinute = 22 * 60;
+  const totalMinutes = endMinute - startMinute;
+  const hourMarks = [6, 10, 14, 18, 22];
+
+  return (
+    <section className="weekPage" aria-label="Week view">
+      <div className="weekSummary">
+        <p className="eyebrow">This week</p>
+        <h2>{weekLabel}</h2>
+        <p><span />{sharedCount} moments together this week</p>
+      </div>
+
+      <div className="weekGrid">
+        <div className="weekDays">
+          <div />
+          {dates.map((day) => {
+            const parts = getDateParts(day);
+            return (
+              <button className={day === currentDateKey ? "today" : ""} type="button" key={day}>
+                <span>{parts.weekday}</span>
+                <strong>{parts.day}</strong>
+              </button>
+            );
+          })}
+        </div>
+        <div className="weekTimeline">
+          <div className="weekTimes">
+            {hourMarks.map((hour) => (
+              <span key={hour} style={{ top: `${((hour * 60 - startMinute) / totalMinutes) * 100}%` }}>
+                {formatWeekHour(hour)}
+              </span>
+            ))}
+          </div>
+          <div className="weekColumns">
+            {hourMarks.map((hour) => (
+              <span className="weekRule" key={hour} style={{ top: `${((hour * 60 - startMinute) / totalMinutes) * 100}%` }} />
+            ))}
+            {dates.map((day) => {
+              const daySegments = splitEventsForDay(events, day, timezone, currentUser, selectedUser).segments.filter(
+                (segment) => segment.endMinutes > startMinute && segment.startMinutes < endMinute
+              );
+
+              return (
+                <div className={day === currentDateKey ? "weekColumn todayColumn" : "weekColumn"} key={day}>
+                  {daySegments.map((segment) => {
+                    const top = ((Math.max(segment.startMinutes, startMinute) - startMinute) / totalMinutes) * 100;
+                    const height =
+                      ((Math.min(segment.endMinutes, endMinute) - Math.max(segment.startMinutes, startMinute)) /
+                        totalMinutes) *
+                      100;
+                    const isShared = segment.lane === "shared";
+                    const className = ["weekEvent", segment.lane, isShared ? "wide" : ""].filter(Boolean).join(" ");
+
+                    return (
+                      <span
+                        className={className}
+                        key={segment.segmentId}
+                        style={{ top: `${top}%`, height: `${Math.max(height, 3)}%` }}
+                        title={`${segment.event.title} ${formatTime(segment.startMinutes)}-${formatTime(segment.endMinutes)}`}
+                      >
+                        {isShared ? segment.event.title : ""}
+                      </span>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="weekLegend">
+        <span><i className="legendYou" />you</span>
+        <span><i className="legendShared" />shared</span>
+        <span><i className="legendPartner" />{selectedUser.displayName}</span>
+      </div>
+    </section>
   );
 }
 
@@ -1046,6 +1321,56 @@ function DraftBlock({ draft }: { draft: DraftRange }) {
       {formatTime(draft.startMinutes)}-{formatTime(draft.endMinutes)}
     </div>
   );
+}
+
+function getWeekDates(dateKey: string) {
+  const { year, month, day } = getDateParts(dateKey);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  const dayOfWeek = date.getUTCDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+
+  return Array.from({ length: 7 }, (_, index) => addDays(dateKey, mondayOffset + index));
+}
+
+function getDateParts(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  const weekday = new Intl.DateTimeFormat("en", { weekday: "short" }).format(date).slice(0, 1);
+
+  return { year, month, day, weekday };
+}
+
+function formatShortDate(dateKey: string) {
+  const { year, month, day } = getDateParts(dateKey);
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(
+    new Date(Date.UTC(year, month - 1, day, 12))
+  );
+}
+
+function formatHeaderEyebrow(dateKey: string, timezone: string) {
+  if (dateKey === getLocalDateKey(new Date(), timezone)) return "TODAY";
+
+  const { year, month, day } = getDateParts(dateKey);
+  return new Intl.DateTimeFormat("en", { weekday: "long" })
+    .format(new Date(Date.UTC(year, month - 1, day, 12)))
+    .toUpperCase();
+}
+
+function formatWeekHour(hour: number) {
+  if (hour === 0) return "12a";
+  if (hour < 12) return `${hour}a`;
+  if (hour === 12) return "12p";
+  return `${hour - 12}p`;
+}
+
+function countSharedEvents(events: CalendarEvent[], currentUser: CalendarUser, selectedUser: CalendarUser | null) {
+  if (!selectedUser) return 0;
+
+  return events.filter((event) => {
+    const hasCurrent = event.ownerUserId === currentUser.id || event.participantUserIds.includes(currentUser.id);
+    const hasSelected = event.ownerUserId === selectedUser.id || event.participantUserIds.includes(selectedUser.id);
+    return hasCurrent && hasSelected;
+  }).length;
 }
 
 function getErrorMessage(error: unknown) {

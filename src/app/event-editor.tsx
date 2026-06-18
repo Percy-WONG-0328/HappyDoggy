@@ -30,7 +30,7 @@ export function EventEditor({
         <div className="editorHeader">
           <h2>Edit event</h2>
           <button type="button" aria-label="Close editor" onClick={onClose}>
-            x
+            X
           </button>
         </div>
 
