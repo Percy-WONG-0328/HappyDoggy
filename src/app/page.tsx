@@ -842,24 +842,26 @@ export default function Home() {
             </button>
           </div>
         </div>
-        <div className="navigationBar">
-            <div className="navSide navSideLeft">
-              <button className="circleNavButton" aria-label="Previous day" onClick={() => void resetDay(addDays(dateKey, -1))}>
-                &lt;
-              </button>
-            </div>
-            <div className="dateNav" aria-label="Current date">
-              <div className="dateStack">
-                <p className="eyebrow">{headerEyebrow}</p>
-                <h1>{formatDateLabel(dateKey)}</h1>
+          {appView === "day" ? (
+            <div className="navigationBar">
+              <div className="navSide navSideLeft">
+                <button className="circleNavButton" aria-label="Previous day" onClick={() => void resetDay(addDays(dateKey, -1))}>
+                  &lt;
+                </button>
+              </div>
+              <div className="dateNav" aria-label="Current date">
+                <div className="dateStack">
+                  <p className="eyebrow">{headerEyebrow}</p>
+                  <h1>{formatDateLabel(dateKey)}</h1>
+                </div>
+              </div>
+              <div className="navSide navSideRight">
+                <button className="circleNavButton" aria-label="Next day" onClick={() => void resetDay(addDays(dateKey, 1))}>
+                  &gt;
+                </button>
               </div>
             </div>
-          <div className="navSide navSideRight">
-            <button className="circleNavButton" aria-label="Next day" onClick={() => void resetDay(addDays(dateKey, 1))}>
-              &gt;
-            </button>
-          </div>
-        </div>
+          ) : null}
         </header>
       ) : null}
       {statusMessage ? (
@@ -896,6 +898,7 @@ export default function Home() {
           currentUser={currentUser}
           selectedUser={comparisonUser}
           timezone={timezone}
+          onWeekChange={(nextDateKey) => void resetDay(nextDateKey)}
         />
       ) : (
         <>
@@ -1179,7 +1182,8 @@ function WeekView({
   currentDateKey,
   currentUser,
   selectedUser,
-  timezone
+  timezone,
+  onWeekChange
 }: {
   dates: string[];
   events: CalendarEvent[];
@@ -1187,23 +1191,38 @@ function WeekView({
   currentUser: CalendarUser;
   selectedUser: CalendarUser;
   timezone: string;
+  onWeekChange: (dateKey: string) => void;
 }) {
+  const weekGridRef = useRef<HTMLDivElement | null>(null);
   const weekLabel = `${formatShortDate(dates[0])} - ${formatShortDate(dates[6])}`;
+  const weekEyebrow = dates.includes(getLocalDateKey(new Date(), timezone)) ? "This week" : "Week of";
   const sharedCount = countSharedEvents(events, currentUser, selectedUser);
-  const startMinute = 6 * 60;
-  const endMinute = 22 * 60;
+  const startMinute = 0;
+  const endMinute = 24 * 60;
   const totalMinutes = endMinute - startMinute;
-  const hourMarks = [6, 10, 14, 18, 22];
+  const hourMarks = [0, 4, 8, 12, 16, 20, 24];
+
+  useEffect(() => {
+    weekGridRef.current?.scrollTo({ top: 7 * 60, behavior: "auto" });
+  }, [currentDateKey]);
 
   return (
     <section className="weekPage" aria-label="Week view">
       <div className="weekSummary">
-        <p className="eyebrow">This week</p>
-        <h2>{weekLabel}</h2>
+        <p className="eyebrow">{weekEyebrow}</p>
+        <div className="weekRangeNav">
+          <button className="circleNavButton" type="button" aria-label="Previous week" onClick={() => onWeekChange(addDays(dates[0], -7))}>
+            &lt;
+          </button>
+          <h2>{weekLabel}</h2>
+          <button className="circleNavButton" type="button" aria-label="Next week" onClick={() => onWeekChange(addDays(dates[0], 7))}>
+            &gt;
+          </button>
+        </div>
         <p><span />{sharedCount} moments together this week</p>
       </div>
 
-      <div className="weekGrid">
+      <div className="weekGrid" ref={weekGridRef}>
         <div className="weekDays">
           <div />
           {dates.map((day) => {
