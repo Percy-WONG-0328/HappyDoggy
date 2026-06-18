@@ -16,6 +16,8 @@ The app supports self-service account registration, login, display-name editing,
 
 The main branch is deployable to Vercel. Local development falls back to mock data when Supabase environment variables are not configured.
 
+The current UI redesign is implemented for the main calendar shell: Day View, Week View, Profile, mobile header behavior, timeline styling, and the guava-themed visual system. Week View includes week navigation, sticky day headers, a scrollable 24-hour grid, and a "Find Time Together" helper that highlights shared free evening slots directly on the weekly grid.
+
 ## Features
 
 - Day-view calendar with two-person lanes and centered shared events.
@@ -43,6 +45,19 @@ The main branch is deployable to Vercel. Local development falls back to mock da
 - PWA manifest, icons, Apple touch icon, iOS metadata, service worker, and offline fallback.
 - New-version prompt with Refresh action.
 - iPhone-friendly compact layout with mobile event creation controls.
+- Redesigned guava/sage calendar interface for Day View, Week View, and Profile.
+- Profile page for display name, relationship invites, and account actions.
+- Week View with previous/next week navigation and a scrollable 24-hour grid.
+- Visual "Find Time Together" helper for shared free evening slots.
+
+## Not Done Yet
+
+- Full post-redesign regression testing on real devices for auth, event CRUD, drag, resize, delete Undo, relationship invites, realtime refresh, Week navigation, and Find Time Together.
+- AI-assisted schedule input: text or voice to structured calendar events, with optional ICS generation/import.
+- Custom domain setup for the deployed PWA.
+- Real settings flows for Profile page entries such as categories, notifications, calendar sync, account privacy, and any future preference screens.
+- Week View creation/editing interactions from the grid itself, such as tapping events to edit or tapping empty time to create.
+- Production polish for onboarding, empty states, accessibility review, and edge-case offline behavior.
 
 ## Completed Phases
 

@@ -830,7 +830,7 @@ export default function Home() {
               >
                 {currentUser.displayName.slice(0, 1).toUpperCase()}
             </button>
-            Comparing with <em>{selectedUser?.displayName ?? "no one yet"}</em>
+            Fused pulp with <em>{selectedUser?.displayName ?? "no one yet"}</em>
           </p>
           <div className={`compactViewToggle ${appView === "week" ? "weekActive" : ""}`} aria-label="Calendar view">
             <span className="toggleIndicator" />
@@ -1194,6 +1194,9 @@ function WeekView({
   onWeekChange: (dateKey: string) => void;
 }) {
   const weekGridRef = useRef<HTMLDivElement | null>(null);
+  const noFreeEveningTimerRef = useRef<number | null>(null);
+  const [highlightedEveningDays, setHighlightedEveningDays] = useState<string[]>([]);
+  const [showNoFreeEvenings, setShowNoFreeEvenings] = useState(false);
   const weekLabel = `${formatShortDate(dates[0])} - ${formatShortDate(dates[6])}`;
   const weekEyebrow = dates.includes(getLocalDateKey(new Date(), timezone)) ? "This week" : "Week of";
   const sharedCount = countSharedEvents(events, currentUser, selectedUser);
@@ -1205,6 +1208,32 @@ function WeekView({
   useEffect(() => {
     weekGridRef.current?.scrollTo({ top: 7 * 60, behavior: "auto" });
   }, [currentDateKey]);
+
+  useEffect(() => {
+    setHighlightedEveningDays([]);
+    setShowNoFreeEvenings(false);
+    if (noFreeEveningTimerRef.current) window.clearTimeout(noFreeEveningTimerRef.current);
+  }, [dates]);
+
+  function findSharedEvenings() {
+    const freeDays = getSharedFreeEvenings(dates, events, timezone, currentUser, selectedUser);
+
+    if (highlightedEveningDays.length) {
+      setHighlightedEveningDays([]);
+      setShowNoFreeEvenings(false);
+      return;
+    }
+
+    if (freeDays.length) {
+      setShowNoFreeEvenings(false);
+      setHighlightedEveningDays(freeDays);
+      return;
+    }
+
+    setShowNoFreeEvenings(true);
+    if (noFreeEveningTimerRef.current) window.clearTimeout(noFreeEveningTimerRef.current);
+    noFreeEveningTimerRef.current = window.setTimeout(() => setShowNoFreeEvenings(false), 3000);
+  }
 
   return (
     <section className="weekPage" aria-label="Week view">
@@ -1254,6 +1283,15 @@ function WeekView({
 
               return (
                 <div className={day === currentDateKey ? "weekColumn todayColumn" : "weekColumn"} key={day}>
+                  {highlightedEveningDays.includes(day) ? (
+                    <span
+                      className="sharedEveningHighlight"
+                      style={{
+                        top: `${((17 * 60 - startMinute) / totalMinutes) * 100}%`,
+                        height: `${((4 * 60) / totalMinutes) * 100}%`
+                      }}
+                    />
+                  ) : null}
                   {daySegments.map((segment) => {
                     const top = ((Math.max(segment.startMinutes, startMinute) - startMinute) / totalMinutes) * 100;
                     const height =
@@ -1268,10 +1306,8 @@ function WeekView({
                         className={className}
                         key={segment.segmentId}
                         style={{ top: `${top}%`, height: `${Math.max(height, 3)}%` }}
-                        title={`${segment.event.title} ${formatTime(segment.startMinutes)}-${formatTime(segment.endMinutes)}`}
-                      >
-                        {isShared ? segment.event.title : ""}
-                      </span>
+                        aria-label={`${segment.event.title} ${formatTime(segment.startMinutes)}-${formatTime(segment.endMinutes)}`}
+                      />
                     );
                   })}
                 </div>
@@ -1286,6 +1322,11 @@ function WeekView({
         <span><i className="legendShared" />shared</span>
         <span><i className="legendPartner" />{selectedUser.displayName}</span>
       </div>
+
+      {showNoFreeEvenings ? <p className="findTimeNote">No shared free evenings this week</p> : null}
+      <button className="findTimeButton" type="button" onClick={findSharedEvenings}>
+        Find Time Together
+      </button>
     </section>
   );
 }
@@ -1380,6 +1421,25 @@ function formatWeekHour(hour: number) {
   if (hour < 12) return `${hour}a`;
   if (hour === 12) return "12p";
   return `${hour - 12}p`;
+}
+
+function getSharedFreeEvenings(
+  dates: string[],
+  events: CalendarEvent[],
+  timezone: string,
+  currentUser: CalendarUser,
+  selectedUser: CalendarUser
+) {
+  const eveningStart = 17 * 60;
+  const eveningEnd = 21 * 60;
+
+  return dates
+    .filter((day) => {
+      const { allDayEvents, segments } = splitEventsForDay(events, day, timezone, currentUser, selectedUser);
+      if (allDayEvents.length) return false;
+
+      return !segments.some((segment) => segment.startMinutes < eveningEnd && segment.endMinutes > eveningStart);
+    });
 }
 
 function countSharedEvents(events: CalendarEvent[], currentUser: CalendarUser, selectedUser: CalendarUser | null) {

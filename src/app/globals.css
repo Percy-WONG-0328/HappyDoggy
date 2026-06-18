@@ -665,6 +665,10 @@ h2 {
   margin: 0 auto;
 }
 
+.weekPage {
+  padding-bottom: 92px;
+}
+
 .profileBackButton {
   min-height: 36px;
   display: inline-flex;
@@ -1098,6 +1102,7 @@ h2 {
 
 .weekEvent {
   position: absolute;
+  z-index: 4;
   left: 26%;
   width: 34%;
   min-height: 12px;
@@ -1128,6 +1133,16 @@ h2 {
   background: var(--slate-block);
 }
 
+.sharedEveningHighlight {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  z-index: 2;
+  border-radius: 6px;
+  background: rgba(205, 139, 120, 0.18);
+  pointer-events: none;
+}
+
 .weekLegend {
   display: flex;
   justify-content: center;
@@ -1143,6 +1158,40 @@ h2 {
   font-family: var(--font-mono);
   font-size: 0.58rem;
   letter-spacing: 0.08em;
+}
+
+.findTimeButton {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  z-index: 35;
+  min-height: 46px;
+  transform: translateX(-50%);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--sage);
+  color: #f7f8f2;
+  padding: 0 22px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.findTimeNote {
+  position: fixed;
+  left: 50%;
+  bottom: calc(82px + env(safe-area-inset-bottom));
+  z-index: 35;
+  width: min(460px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card-sm);
+  background: rgba(255, 253, 247, 0.86);
+  color: var(--sage-text);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-card);
+  text-align: center;
 }
 
 .allDayStrip {
