@@ -1,4 +1,4 @@
-const CACHE_NAME = "happydoggy-shell-v1";
+const CACHE_NAME = "happydoggy-shell-v2";
 const SHELL_URLS = ["/", "/offline.html", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -30,5 +30,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+  if (SHELL_URLS.includes(url.pathname) || url.pathname.startsWith("/icons/")) {
+    event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+  }
 });

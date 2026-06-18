@@ -31,6 +31,7 @@ import {
   zonedTimeToUtc
 } from "@/lib/time";
 import { getSupabaseClient } from "@/lib/supabase";
+import { StatusMessage, type StatusTone } from "./status-message";
 
 const PIXELS_PER_MINUTE = 1.15;
 const DAY_HEIGHT = 1440 * PIXELS_PER_MINUTE;
@@ -67,7 +68,6 @@ type DragState =
 
 type SaveStatus = "idle" | "saving" | "saved" | "syncing" | "error";
 type AuthMode = "login" | "register";
-type StatusTone = "error" | "success";
 
 type PendingDelete = {
   event: CalendarEvent;
@@ -1043,29 +1043,6 @@ function DraftBlock({ draft }: { draft: DraftRange }) {
   return (
     <div className={`draftBlock ${draft.lane}`} style={getDraftStyle(draft)}>
       {formatTime(draft.startMinutes)}-{formatTime(draft.endMinutes)}
-    </div>
-  );
-}
-
-function StatusMessage({
-  tone,
-  message,
-  showUndo,
-  onUndo
-}: {
-  tone: StatusTone;
-  message: string;
-  showUndo: boolean;
-  onUndo: () => void;
-}) {
-  return (
-    <div className={`statusMessage ${tone}`}>
-      <span>{message}</span>
-      {showUndo ? (
-        <button type="button" onClick={onUndo}>
-          Undo
-        </button>
-      ) : null}
     </div>
   );
 }

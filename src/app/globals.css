@@ -206,6 +206,32 @@ div.statusMessage {
   font-size: 0.84rem;
 }
 
+.updateBanner {
+  position: fixed;
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--ink);
+  color: #ffffff;
+  padding: 10px 12px;
+  box-shadow: 0 10px 24px rgba(28, 36, 48, 0.18);
+  font-size: 0.84rem;
+}
+
+.updateBanner button {
+  min-height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 8px;
+  background: transparent;
+  color: #ffffff;
+  padding: 0 10px;
+}
+
 .eyebrow {
   margin: 0 0 3px;
   color: var(--muted);
