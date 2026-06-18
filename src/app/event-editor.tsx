@@ -23,18 +23,32 @@ export function EventEditor({
   onDelete: () => void;
   onSave: (event: CalendarEvent) => void;
 }) {
-  const [draftEvent, setDraftEvent] = useState(event);
-  const isShared = selectedUser ? draftEvent.participantUserIds.includes(selectedUser.id) : false;
+  const [draftTitle, setDraftTitle] = useState(event.title);
+  const [draftCategory, setDraftCategory] = useState(event.category);
+  const [selectedColor, setSelectedColor] = useState(event.color);
+  const [isPrivate, setIsPrivate] = useState(event.visibility === "private");
+  const [includesSelectedUser, setIncludesSelectedUser] = useState(
+    selectedUser ? event.participantUserIds.includes(selectedUser.id) : false
+  );
 
   useEffect(() => {
-    setDraftEvent(event);
-  }, [event]);
+    setDraftTitle(event.title);
+    setDraftCategory(event.category);
+    setSelectedColor(event.color);
+    setIsPrivate(event.visibility === "private");
+    setIncludesSelectedUser(selectedUser ? event.participantUserIds.includes(selectedUser.id) : false);
+  }, [event, selectedUser]);
 
-  function updateDraft(patch: Partial<CalendarEvent>) {
-    setDraftEvent((currentEvent) => ({
-      ...currentEvent,
-      ...patch
-    }));
+  function saveDraft() {
+    onSave({
+      ...event,
+      title: draftTitle,
+      category: draftCategory,
+      color: selectedColor,
+      visibility: isPrivate ? "private" : "relationship",
+      participantUserIds: selectedUser && includesSelectedUser ? [selectedUser.id] : []
+    });
+    onClose();
   }
 
   return (
@@ -50,18 +64,18 @@ export function EventEditor({
         <label>
           Title
           <input
-            value={draftEvent.title}
+            value={draftTitle}
             disabled={!canEdit}
-            onChange={(change) => updateDraft({ title: change.target.value })}
+            onChange={(change) => setDraftTitle(change.target.value)}
           />
         </label>
 
         <label>
           Category
           <select
-            value={draftEvent.category}
+            value={draftCategory}
             disabled={!canEdit}
-            onChange={(change) => updateDraft({ category: change.target.value as CalendarEvent["category"] })}
+            onChange={(change) => setDraftCategory(change.target.value as CalendarEvent["category"])}
           >
             {categories.map((category) => (
               <option key={category}>{category}</option>
@@ -76,55 +90,53 @@ export function EventEditor({
               <button
                 type="button"
                 aria-label={`Set color ${color}`}
-                className={draftEvent.color === color ? "selectedSwatch" : ""}
+                className={selectedColor === color ? "selectedSwatch" : ""}
                 style={{ background: color }}
                 key={color}
                 disabled={!canEdit}
-                onClick={() => updateDraft({ color })}
+                onClick={() => setSelectedColor(color)}
               />
             ))}
           </div>
         </fieldset>
 
-        <label className="checkboxLine">
-          <input
-            type="checkbox"
-            checked={draftEvent.visibility === "private"}
-            disabled={!canEdit}
-            onChange={(change) => updateDraft({ visibility: change.target.checked ? "private" : "relationship" })}
-          />
-          Private
-        </label>
-
-        {selectedUser && canManageParticipants ? (
-          <label className="checkboxLine">
-            <input
-              type="checkbox"
-              checked={isShared}
-              onChange={(change) =>
-                updateDraft({
-                  participantUserIds: change.target.checked ? [selectedUser.id] : []
-                })
-              }
-            />
-            Include {selectedUser.displayName}
+        <div className="editorToggleRow">
+          <label className="editorSwitchLine">
+            <span>Private</span>
+            <button
+              type="button"
+              className={isPrivate ? "editorSwitch active" : "editorSwitch"}
+              role="switch"
+              aria-checked={isPrivate}
+              disabled={!canEdit}
+              onClick={() => setIsPrivate((value) => !value)}
+            >
+              <span />
+            </button>
           </label>
-        ) : null}
+          <label className="editorSwitchLine">
+            <span>Include {selectedUser?.displayName ?? "partner"}</span>
+            <button
+              type="button"
+              className={includesSelectedUser ? "editorSwitch active" : "editorSwitch"}
+              role="switch"
+              aria-checked={includesSelectedUser}
+              disabled={!canEdit || !selectedUser || !canManageParticipants}
+              onClick={() => setIncludesSelectedUser((value) => !value)}
+            >
+              <span />
+            </button>
+          </label>
+        </div>
 
-        <div className="editorActions">
+        <div className="editorActionRow">
           <button type="button" className="danger" aria-label="Delete event" onClick={onDelete} disabled={!canDelete}>
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path d="M9 3h6l1 2h4v2H4V5h4l1-2Z" />
               <path d="M6 9h12l-1 11H7L6 9Zm4 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z" />
             </svg>
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              onSave(draftEvent);
-              onClose();
-            }}
-          >
+          <button type="button" onClick={saveDraft} disabled={!canEdit}>
             Save with love
           </button>
         </div>

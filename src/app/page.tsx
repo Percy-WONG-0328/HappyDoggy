@@ -902,125 +902,128 @@ export default function Home() {
         />
       ) : (
         <>
-      <div className="dayCreateActions" aria-label="Create event">
-        <button
-          type="button"
-          className={mobileCreateLane === "current" ? "activeCreate" : ""}
-          onClick={() => setMobileCreateLane((lane) => (lane === "current" ? null : "current"))}
-        >
-          + Add for me
-        </button>
-        {selectedUser ? (
-          <button
-            type="button"
-            className={mobileCreateLane === "shared" ? "activeCreate" : ""}
-            onClick={() => setMobileCreateLane((lane) => (lane === "shared" ? null : "shared"))}
-          >
-            + For both
-          </button>
-        ) : null}
-      </div>
-      <section className="allDayStrip" aria-label="All day events">
-        <span>All day</span>
-        <div>
-          {visible.allDayEvents.map((event) => (
-            <button
-              className="allDayEvent"
-              style={{ borderColor: event.color }}
-              key={event.id}
-              onClick={() => setEditingEventId(event.id)}
-            >
-              {event.title}
-            </button>
-          ))}
-        </div>
-      </section>
+          <div className="dayTimelineScrollArea">
+            <section className="allDayStrip" aria-label="All day events">
+              <span>All day</span>
+              <div>
+                {visible.allDayEvents.map((event) => (
+                  <button
+                    className="allDayEvent"
+                    style={{ borderColor: event.color }}
+                    key={event.id}
+                    onClick={() => setEditingEventId(event.id)}
+                  >
+                    {event.title}
+                  </button>
+                ))}
+              </div>
+            </section>
 
-      <section className="calendarFrame">
-        <div className="timeHeader" />
-        <div className="laneHeaders">
-          <span>{currentUser.displayName}</span>
-          <span>Shared</span>
-          <span>{selectedUser?.displayName ?? "No comparison user"}</span>
-        </div>
+            <section className="calendarFrame">
+              <div className="timeHeader" />
+              <div className="laneHeaders">
+                <span>{currentUser.displayName}</span>
+                <span>Shared</span>
+                <span>{selectedUser?.displayName ?? "No comparison user"}</span>
+              </div>
 
-        <div className="timeRail">
-          {Array.from({ length: 25 }, (_, hour) => (
-            <span key={hour} style={{ top: hour * 60 * PIXELS_PER_MINUTE }}>
-              {String(hour).padStart(2, "0")}:00
-            </span>
-          ))}
-        </div>
+              <div className="timeRail">
+                {Array.from({ length: 25 }, (_, hour) => (
+                  <span key={hour} style={{ top: hour * 60 * PIXELS_PER_MINUTE }}>
+                    {String(hour).padStart(2, "0")}:00
+                  </span>
+                ))}
+              </div>
 
-        <div
-          ref={timelineRef}
-          className="timeline"
-          style={{ height: DAY_HEIGHT }}
-          onPointerMove={handlePointerMove}
-          onPointerUp={finishPointerInteraction}
-          onPointerCancel={finishPointerInteraction}
-          onPointerLeave={() => {
-            if (longPressRef.current) {
-              window.clearTimeout(longPressRef.current);
-              longPressRef.current = null;
-            }
-          }}
-        >
-          <div className="hourLines">
-            {Array.from({ length: 1440 / GRID_INTERVAL_MINUTES + 1 }, (_, slot) => {
-              const minutes = slot * GRID_INTERVAL_MINUTES;
-              const isHour = minutes % 60 === 0;
-
-              return (
-                <span
-                  className={isHour ? "hourLine" : "quarterLine"}
-                  key={minutes}
-                  style={{ top: minutes * PIXELS_PER_MINUTE }}
-                />
-              );
-            })}
-          </div>
-
-          <div className="emptyLayer laneCurrent" onPointerDown={(event) => handleEmptyPointerDown(event, "current")} />
-          {selectedUser ? (
-            <div className="emptyLayer laneShared" onPointerDown={(event) => handleEmptyPointerDown(event, "shared")} />
-          ) : null}
-
-          {draft ? <DraftBlock draft={draft} /> : null}
-          {laidOutSegments.map((segment) => {
-            const overlapsSideLane = hasSideLaneOverlap(segment, laidOutSegments);
-
-            return (
-              <EventBlock
-                key={segment.segmentId}
-                segment={segment}
-                overlapsSideLane={overlapsSideLane}
-                editable={canEditEvent(segment.event, currentUser.id, cloudEnabled)}
-                onEdit={() => {
-                  if (canEditEvent(segment.event, currentUser.id, cloudEnabled)) {
-                    setEditingEventId(segment.event.id);
+              <div
+                ref={timelineRef}
+                className="timeline"
+                style={{ height: DAY_HEIGHT }}
+                onPointerMove={handlePointerMove}
+                onPointerUp={finishPointerInteraction}
+                onPointerCancel={finishPointerInteraction}
+                onPointerLeave={() => {
+                  if (longPressRef.current) {
+                    window.clearTimeout(longPressRef.current);
+                    longPressRef.current = null;
                   }
                 }}
-                onDragStart={(pointerEvent, mode) => {
-                  if (!canEditEvent(segment.event, currentUser.id, cloudEnabled)) return;
-                  pointerEvent.preventDefault();
-                  pointerEvent.stopPropagation();
-                  pointerEvent.currentTarget.setPointerCapture(pointerEvent.pointerId);
-                  const pointerMinutes = minutesFromPointer(pointerEvent.clientY);
-                  setDragState({
-                    kind: mode,
-                    eventId: segment.event.id,
-                    originalEvent: segment.event,
-                    originMinutes: pointerMinutes,
-                    startMinutes: segment.startMinutes,
-                    endMinutes: segment.endMinutes
-                  });
-                }}
-              />
-            );
-          })}
-        </div>
-      </section>
+              >
+                <div className="hourLines">
+                  {Array.from({ length: 1440 / GRID_INTERVAL_MINUTES + 1 }, (_, slot) => {
+                    const minutes = slot * GRID_INTERVAL_MINUTES;
+                    const isHour = minutes % 60 === 0;
+
+                    return (
+                      <span
+                        className={isHour ? "hourLine" : "quarterLine"}
+                        key={minutes}
+                        style={{ top: minutes * PIXELS_PER_MINUTE }}
+                      />
+                    );
+                  })}
+                </div>
+
+                <div className="emptyLayer laneCurrent" onPointerDown={(event) => handleEmptyPointerDown(event, "current")} />
+                {selectedUser ? (
+                  <div className="emptyLayer laneShared" onPointerDown={(event) => handleEmptyPointerDown(event, "shared")} />
+                ) : null}
+
+                {draft ? <DraftBlock draft={draft} /> : null}
+                {laidOutSegments.map((segment) => {
+                  const overlapsSideLane = hasSideLaneOverlap(segment, laidOutSegments);
+
+                  return (
+                    <EventBlock
+                      key={segment.segmentId}
+                      segment={segment}
+                      overlapsSideLane={overlapsSideLane}
+                      editable={canEditEvent(segment.event, currentUser.id, cloudEnabled)}
+                      onEdit={() => {
+                        if (canEditEvent(segment.event, currentUser.id, cloudEnabled)) {
+                          setEditingEventId(segment.event.id);
+                        }
+                      }}
+                      onDragStart={(pointerEvent, mode) => {
+                        if (!canEditEvent(segment.event, currentUser.id, cloudEnabled)) return;
+                        pointerEvent.preventDefault();
+                        pointerEvent.stopPropagation();
+                        pointerEvent.currentTarget.setPointerCapture(pointerEvent.pointerId);
+                        const pointerMinutes = minutesFromPointer(pointerEvent.clientY);
+                        setDragState({
+                          kind: mode,
+                          eventId: segment.event.id,
+                          originalEvent: segment.event,
+                          originMinutes: pointerMinutes,
+                          startMinutes: segment.startMinutes,
+                          endMinutes: segment.endMinutes
+                        });
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+
+          <div className="dayCreateActions" aria-label="Create event">
+            <button
+              type="button"
+              className={mobileCreateLane === "current" ? "activeCreate" : ""}
+              onClick={() => setMobileCreateLane((lane) => (lane === "current" ? null : "current"))}
+            >
+              + Add for me
+            </button>
+            {selectedUser ? (
+              <button
+                type="button"
+                className={mobileCreateLane === "shared" ? "activeCreate" : ""}
+                onClick={() => setMobileCreateLane((lane) => (lane === "shared" ? null : "shared"))}
+              >
+                + For both
+              </button>
+            ) : null}
+          </div>
         </>
       )}
 

@@ -166,7 +166,7 @@ select:disabled {
 .loginPanel button,
 .accountPanel button,
 .toolbar button,
-.editorActions button:last-child {
+.editorActionRow button:last-child {
   border: 0;
   background: var(--guava);
   color: #fdf4e9;
@@ -558,13 +558,20 @@ h2 {
   color: #fdf4e9 !important;
 }
 
+.dayTimelineScrollArea {
+  padding-bottom: 96px;
+}
+
 .dayCreateActions {
-  position: relative;
-  z-index: 15;
-  width: min(520px, 100%);
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
   display: flex;
-  gap: 9px;
-  margin: 10px auto 16px;
+  gap: 12px;
+  padding: 12px 16px 28px;
+  background: linear-gradient(to top, var(--paper) 70%, transparent);
 }
 
 .dayCreateActions button {
@@ -1541,18 +1548,80 @@ h2 {
 }
 
 .editorHeader,
-.editorActions {
+.editorToggleRow,
+.editorActionRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.editorActions button {
+.editorActionRow button {
   min-height: 54px;
 }
 
-.editorActions .danger {
+.editorToggleRow {
+  align-items: stretch;
+}
+
+.editorSwitchLine {
+  flex: 1;
+  min-width: 0;
+  min-height: 54px;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px !important;
+  border: 1px solid var(--line);
+  border-radius: var(--r-input);
+  background: var(--paper-card);
+  color: var(--ink-800) !important;
+  font-family: var(--font-serif) !important;
+  font-size: 1.02rem !important;
+  letter-spacing: 0 !important;
+  padding: 0 12px !important;
+  text-transform: none !important;
+}
+
+.editorSwitchLine > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editorSwitch {
+  width: 56px;
+  min-width: 56px;
+  min-height: 44px !important;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill) !important;
+  background: var(--paper-sunken) !important;
+  box-shadow: none !important;
+  padding: 5px !important;
+}
+
+.editorSwitch span {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--paper-card);
+  box-shadow: var(--shadow-card);
+  transition: transform 160ms ease;
+}
+
+.editorSwitch.active {
+  border-color: var(--guava);
+  background: var(--guava-tint) !important;
+}
+
+.editorSwitch.active span {
+  transform: translateX(12px);
+}
+
+.editorActionRow .danger {
   flex: none;
   width: 54px;
   display: inline-grid;
@@ -1561,13 +1630,13 @@ h2 {
   font-size: 0;
 }
 
-.editorActions .danger svg {
+.editorActionRow .danger svg {
   width: 18px;
   height: 18px;
   fill: currentColor;
 }
 
-.editorActions button:last-child {
+.editorActionRow button:last-child {
   flex: 1;
   border-radius: 28px;
   font-size: 1.22rem;
@@ -1595,38 +1664,15 @@ h2 {
   text-transform: none;
 }
 
-.checkboxLine {
-  display: flex !important;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 44px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-input);
-  background: var(--paper-card);
-  color: var(--ink-800) !important;
-  font-family: var(--font-serif) !important;
-  font-size: 1.06rem !important;
-  letter-spacing: 0 !important;
-  padding: 0 12px;
-  text-transform: none !important;
-}
-
-.checkboxLine input {
-  width: auto;
-  min-height: auto;
-  accent-color: var(--guava);
-}
-
 .swatches {
   display: grid;
-  grid-template-columns: repeat(6, 38px);
+  grid-template-columns: repeat(6, 44px);
   gap: 8px;
 }
 
 .swatches button {
-  width: 38px;
-  min-height: 38px;
+  width: 44px;
+  min-height: 44px;
   border: 2px solid var(--paper-sheet);
   border-radius: 50%;
   padding: 0;
@@ -1634,7 +1680,10 @@ h2 {
 }
 
 .swatches .selectedSwatch {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 0 0 3px var(--paper-card),
+    0 0 0 5px var(--ink-800);
+  transform: scale(1.08);
 }
 
 .danger {
