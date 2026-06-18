@@ -1591,6 +1591,7 @@ h2 {
   min-width: 0;
   min-height: 0;
   display: flex !important;
+  grid-template-columns: none !important;
   align-items: center;
   justify-content: space-between;
   gap: 16px !important;
@@ -1614,6 +1615,7 @@ h2 {
 
 .editorSwitch {
   flex: none;
+  margin-left: auto;
   width: 44px;
   min-width: 44px;
   height: 24px;
@@ -1699,7 +1701,10 @@ h2 {
 .swatches {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-top: 12px;
   gap: 10px;
 }
 
