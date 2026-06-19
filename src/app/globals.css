@@ -154,7 +154,8 @@ select:disabled {
 .toolbar select,
 .editor button,
 .editor input,
-.editor select {
+.editor select,
+.editor textarea {
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: var(--r-input);
@@ -166,7 +167,8 @@ select:disabled {
 .loginPanel button,
 .accountPanel button,
 .toolbar button,
-.editorActionRow button:last-child {
+.editorActionRow button:last-child,
+.aiComposerActions button:last-child {
   border: 0;
   background: var(--guava);
   color: #fdf4e9;
@@ -576,7 +578,6 @@ h2 {
 
 .dayCreateActions button {
   -webkit-tap-highlight-color: transparent;
-  flex: 1;
   min-height: 44px;
   border: 0;
   border-radius: var(--r-pill);
@@ -586,21 +587,41 @@ h2 {
   font-size: 1rem;
 }
 
-.dayCreateActions button:first-child {
+.dayCreateActions .createForMe,
+.dayCreateActions .createForBoth {
+  flex: 1;
+}
+
+.dayCreateActions .createForMe {
   background: var(--guava);
 }
 
-.dayCreateActions button:last-child {
+.dayCreateActions .createForBoth {
   background: var(--sage);
   color: #f7f8f2;
 }
 
-.dayCreateActions button:first-child.activeCreate {
+.dayCreateActions .aiCreateButton {
+  flex: none;
+  width: 52px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--ink-800);
+  padding: 0;
+}
+
+.dayCreateActions .aiCreateButton svg {
+  width: 19px;
+  height: 19px;
+  fill: currentColor;
+}
+
+.dayCreateActions .createForMe.activeCreate {
   background: var(--guava) !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-.dayCreateActions button:last-child.activeCreate {
+.dayCreateActions .createForBoth.activeCreate {
   background: var(--sage) !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
@@ -1572,6 +1593,19 @@ h2 {
   margin-bottom: 20px !important;
 }
 
+.editorNotice {
+  margin: -8px 0 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card-sm);
+  background: rgba(255, 253, 247, 0.62);
+  color: var(--label-700);
+  padding: 9px 11px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .editorActionRow button {
   min-height: 54px;
 }
@@ -1689,13 +1723,46 @@ h2 {
 }
 
 .editor input,
-.editor select {
+.editor select,
+.editor textarea {
   width: 100%;
   background: var(--paper-card);
   font-family: var(--font-serif);
   font-size: 1.08rem;
   letter-spacing: 0;
   text-transform: none;
+}
+
+.editor textarea {
+  min-height: 132px;
+  resize: vertical;
+  line-height: 1.35;
+  padding: 12px 14px;
+}
+
+.aiComposerActions {
+  display: flex;
+  gap: 12px;
+  margin: 0 -18px;
+  border-top: 1px solid rgba(58, 52, 44, 0.07);
+  background: var(--paper-sheet);
+  padding: 14px 18px 24px;
+}
+
+.aiComposerActions button {
+  min-height: 54px;
+}
+
+.aiComposerActions button:first-child {
+  flex: none;
+  width: 108px;
+}
+
+.aiComposerActions button:last-child {
+  flex: 1;
+  border-radius: 28px;
+  font-size: 1.08rem;
+  font-weight: 600;
 }
 
 .swatches {

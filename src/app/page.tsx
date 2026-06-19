@@ -38,6 +38,8 @@ const PIXELS_PER_MINUTE = 1.15;
 const DAY_HEIGHT = 1440 * PIXELS_PER_MINUTE;
 const MIN_EVENT_MINUTES = 15;
 const GRID_INTERVAL_MINUTES = 15;
+const AI_DEFAULT_START_MINUTES = 9 * 60;
+const CATEGORY_OPTIONS = ["Life", "Study", "Date", "Work", "Health", "Other"] as const;
 
 type DraftRange = {
   lane: RenderLane;
@@ -83,6 +85,17 @@ type OptimisticSave = {
   latestToken: number;
 };
 
+type AiParsedEvent = {
+  title?: string | null;
+  date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  category?: string | null;
+  include_partner?: boolean | null;
+  is_all_day?: boolean | null;
+  parsed?: boolean;
+};
+
 export default function Home() {
   const timezone = getDefaultTimezone();
   const cloudEnabled = canUseSupabase();
@@ -106,6 +119,10 @@ export default function Home() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [relationshipInvites, setRelationshipInvites] = useState<RelationshipInvite[]>([]);
   const [weekEvents, setWeekEvents] = useState<CalendarEvent[]>([]);
+  const [aiComposerOpen, setAiComposerOpen] = useState(false);
+  const [aiInput, setAiInput] = useState("");
+  const [isAiParsing, setIsAiParsing] = useState(false);
+  const [unsavedDraftEventId, setUnsavedDraftEventId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(cloudEnabled);
   const [isSyncing, setIsSyncing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -166,9 +183,9 @@ export default function Home() {
   }, [pendingDelete]);
 
   useEffect(() => {
-    if (!cloudEnabled || currentUserId === mockCurrentUser.id) return;
+    if (!cloudEnabled || currentUserId === mockCurrentUser.id || unsavedDraftEventId) return;
     refreshCloudEvents(dateKey).catch(handleCloudError);
-  }, [cloudEnabled, currentUserId, dateKey, timezone]);
+  }, [cloudEnabled, currentUserId, dateKey, timezone, unsavedDraftEventId]);
 
   useEffect(() => {
     if (!cloudEnabled || currentUserId === mockCurrentUser.id || appView !== "week") return;
@@ -504,6 +521,123 @@ export default function Home() {
     }
 
     setEvents(createMockEvents(nextDateKey));
+  }
+
+  async function handleAiComposerSubmit(submitEvent: React.FormEvent<HTMLFormElement>) {
+    submitEvent.preventDefault();
+    const text = aiInput.trim();
+    if (!text || isAiParsing) return;
+
+    setIsAiParsing(true);
+    setStatusMessage("");
+
+    try {
+      const response = await fetch("/api/ai/parse-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          now: new Date().toISOString(),
+          timezone,
+          currentDate: dateKey,
+          partnerName: selectedUser?.displayName ?? null
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Parse failed, please retry or add manually.");
+      }
+
+      const parsed = (await response.json()) as AiParsedEvent;
+      openAiDraft(text, parsed);
+      setAiInput("");
+      setAiComposerOpen(false);
+    } catch (error) {
+      setStatusTone("error");
+      setStatusMessage(getErrorMessage(error) || "Parse failed, please retry or add manually.");
+    } finally {
+      setIsAiParsing(false);
+    }
+  }
+
+  function openAiDraft(originalText: string, parsed: AiParsedEvent) {
+    const eventDateKey = isDateKey(parsed.date) ? parsed.date : dateKey;
+    const title = parsed.title?.trim() || originalText;
+    const category = normalizeCategory(parsed.category);
+    const startTime = parseClockTime(parsed.start_time);
+    const endTime = parseClockTime(parsed.end_time);
+    const hasParsedDate = isDateKey(parsed.date);
+    const hasParsedTime = startTime !== null || endTime !== null;
+    const includePartner = Boolean(
+      selectedUser &&
+        parsed.include_partner &&
+        inputMentionsPartner(originalText, selectedUser)
+    );
+    const participantUserIds = includePartner && selectedUser ? [selectedUser.id] : [];
+    const timeRange = getAiDraftTimeRange(eventDateKey, startTime, endTime, Boolean(parsed.is_all_day), hasParsedDate, hasParsedTime);
+    const draftEvent = makeEvent(
+      crypto.randomUUID(),
+      title,
+      timeRange.startDateKey,
+      timeRange.startMinutes,
+      timeRange.endDateKey,
+      timeRange.endMinutes,
+      category,
+      includePartner ? colors[3] : colors[0],
+      currentUser.id,
+      "relationship",
+      participantUserIds,
+      timeRange.isAllDay
+    );
+    const nextEvents = eventsRef.current
+      .filter((event) => event.id !== unsavedDraftEventId)
+      .concat(draftEvent);
+
+    setAppView("day");
+    setDateKey(eventDateKey);
+    eventsRef.current = nextEvents;
+    setEvents(nextEvents);
+    setUnsavedDraftEventId(draftEvent.id);
+    setEditingEventId(draftEvent.id);
+  }
+
+  function closeEditor() {
+    if (editingEventId && editingEventId === unsavedDraftEventId) {
+      const nextEvents = eventsRef.current.filter((event) => event.id !== editingEventId);
+      eventsRef.current = nextEvents;
+      setEvents(nextEvents);
+      setUnsavedDraftEventId(null);
+    }
+
+    setEditingEventId(null);
+  }
+
+  function saveEditorEvent(eventId: string, draftEvent: CalendarEvent) {
+    if (eventId === unsavedDraftEventId) {
+      const previousEvents = eventsRef.current.filter((event) => event.id !== eventId);
+      const nextEvents = eventsRef.current.map((event) => (event.id === eventId ? draftEvent : event));
+      eventsRef.current = nextEvents;
+      setEvents(nextEvents);
+      setUnsavedDraftEventId(null);
+      setEditingEventId(null);
+
+      if (cloudEnabled) {
+        markSaveStatus("saving");
+        createCalendarEvent(draftEvent)
+          .then(() => {
+            markSaveStatus("saved");
+            return refreshCloudEvents(dateKey);
+          })
+          .catch((error) => handleRollbackError(error, previousEvents, "Create failed. The AI draft was removed."));
+      } else {
+        markSaveStatus("saved");
+      }
+
+      return;
+    }
+
+    updateEvent(eventId, draftEvent);
+    setEditingEventId(null);
   }
 
   function minutesFromPointer(clientY: number) {
@@ -1020,15 +1154,30 @@ export default function Home() {
             <div className="dayCreateActions" aria-label="Create event">
               <button
                 type="button"
-                className={mobileCreateLane === "current" ? "activeCreate" : ""}
+                className={`createForMe ${mobileCreateLane === "current" ? "activeCreate" : ""}`}
                 onClick={() => setMobileCreateLane((lane) => (lane === "current" ? null : "current"))}
               >
                 + Add for me
               </button>
+              <button
+                type="button"
+                className="aiCreateButton"
+                aria-label="Add with AI"
+                onClick={() => {
+                  setMobileCreateLane(null);
+                  setAiComposerOpen(true);
+                }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M12 2l1.45 5.35L19 9l-5.55 1.65L12 16l-1.45-5.35L5 9l5.55-1.65L12 2Z" />
+                  <path d="M5 14l.75 2.75L8.5 17.5l-2.75.75L5 21l-.75-2.75-2.75-.75 2.75-.75L5 14Z" />
+                  <path d="M19 13l.65 2.35L22 16l-2.35.65L19 19l-.65-2.35L16 16l2.35-.65L19 13Z" />
+                </svg>
+              </button>
               {selectedUser ? (
                 <button
                   type="button"
-                  className={mobileCreateLane === "shared" ? "activeCreate" : ""}
+                  className={`createForBoth ${mobileCreateLane === "shared" ? "activeCreate" : ""}`}
                   onClick={() => setMobileCreateLane((lane) => (lane === "shared" ? null : "shared"))}
                 >
                   + For both
@@ -1046,12 +1195,78 @@ export default function Home() {
           canEdit={canEditEvent(editingEvent, currentUser.id, cloudEnabled)}
           canDelete={canDeleteEvent(editingEvent, currentUser.id, cloudEnabled)}
           canManageParticipants={editingEvent.ownerUserId === currentUser.id}
-          onClose={() => setEditingEventId(null)}
-          onDelete={() => deleteEvent(editingEvent.id)}
-          onSave={(draftEvent) => updateEvent(editingEvent.id, draftEvent)}
+          notice={editingEvent.id === unsavedDraftEventId ? "AI generated draft. Please confirm before saving." : undefined}
+          onClose={closeEditor}
+          onDelete={() => {
+            if (editingEvent.id === unsavedDraftEventId) {
+              closeEditor();
+              return;
+            }
+
+            deleteEvent(editingEvent.id);
+          }}
+          onSave={(draftEvent) => saveEditorEvent(editingEvent.id, draftEvent)}
+        />
+      ) : null}
+
+      {aiComposerOpen ? (
+        <AiEventComposer
+          value={aiInput}
+          isParsing={isAiParsing}
+          onChange={setAiInput}
+          onClose={() => {
+            if (!isAiParsing) setAiComposerOpen(false);
+          }}
+          onSubmit={handleAiComposerSubmit}
         />
       ) : null}
     </main>
+  );
+}
+
+function AiEventComposer({
+  value,
+  isParsing,
+  onChange,
+  onClose,
+  onSubmit
+}: {
+  value: string;
+  isParsing: boolean;
+  onChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className="modalLayer" role="dialog" aria-modal="true">
+      <form className="editor aiComposer" onSubmit={onSubmit}>
+        <div className="editorHeader">
+          <h2>Add with AI</h2>
+          <button type="button" aria-label="Close AI composer" onClick={onClose} disabled={isParsing}>
+            ×
+          </button>
+        </div>
+
+        <label className="editorField aiPromptField">
+          Describe event
+          <textarea
+            value={value}
+            disabled={isParsing}
+            placeholder="Tomorrow 3-5pm with Percy watch a movie"
+            onChange={(event) => onChange(event.target.value)}
+          />
+        </label>
+
+        <div className="aiComposerActions">
+          <button type="button" className="danger" onClick={onClose} disabled={isParsing}>
+            Cancel
+          </button>
+          <button type="submit" disabled={isParsing || !value.trim()}>
+            {isParsing ? "Parsing..." : "Create draft"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -1395,6 +1610,85 @@ function DraftBlock({ draft }: { draft: DraftRange }) {
     <div className={`draftBlock ${draft.lane}`} style={getDraftStyle(draft)}>
       {formatTime(draft.startMinutes)}-{formatTime(draft.endMinutes)}
     </div>
+  );
+}
+
+function getAiDraftTimeRange(
+  dateKey: string,
+  startTime: number | null,
+  endTime: number | null,
+  requestedAllDay: boolean,
+  hasParsedDate: boolean,
+  hasParsedTime: boolean
+) {
+  if (requestedAllDay || (hasParsedDate && !hasParsedTime)) {
+    return {
+      startDateKey: dateKey,
+      startMinutes: 0,
+      endDateKey: addDays(dateKey, 1),
+      endMinutes: 0,
+      isAllDay: true
+    };
+  }
+
+  const startMinutes = snapMinutes(startTime ?? AI_DEFAULT_START_MINUTES);
+  let rawEndMinutes = snapMinutes(endTime ?? startMinutes + 60);
+
+  if (rawEndMinutes <= startMinutes) {
+    rawEndMinutes += 1440;
+  }
+
+  if (rawEndMinutes >= 1440) {
+    return {
+      startDateKey: dateKey,
+      startMinutes,
+      endDateKey: addDays(dateKey, 1),
+      endMinutes: rawEndMinutes - 1440,
+      isAllDay: false
+    };
+  }
+
+  return {
+    startDateKey: dateKey,
+    startMinutes,
+    endDateKey: dateKey,
+    endMinutes: rawEndMinutes,
+    isAllDay: false
+  };
+}
+
+function parseClockTime(value: string | null | undefined) {
+  if (!value) return null;
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function isDateKey(value: string | null | undefined): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const { year, month, day } = getDateParts(value);
+  return Number.isInteger(year) && Number.isInteger(month) && Number.isInteger(day) && month >= 1 && month <= 12 && day >= 1 && day <= 31;
+}
+
+function normalizeCategory(value: string | null | undefined): CalendarEvent["category"] {
+  return CATEGORY_OPTIONS.includes(value as CalendarEvent["category"]) ? (value as CalendarEvent["category"]) : "Life";
+}
+
+function inputMentionsPartner(input: string, selectedUser: CalendarUser) {
+  const haystack = input.toLocaleLowerCase();
+  const displayName = selectedUser.displayName.toLocaleLowerCase().trim();
+  const emailName = selectedUser.email.split("@")[0]?.toLocaleLowerCase().trim();
+
+  return Boolean(
+    (displayName && haystack.includes(displayName)) ||
+      (emailName && haystack.includes(emailName))
   );
 }
 

@@ -10,6 +10,7 @@ export function EventEditor({
   canEdit,
   canDelete,
   canManageParticipants,
+  notice,
   onClose,
   onDelete,
   onSave
@@ -19,6 +20,7 @@ export function EventEditor({
   canEdit: boolean;
   canDelete: boolean;
   canManageParticipants: boolean;
+  notice?: string;
   onClose: () => void;
   onDelete: () => void;
   onSave: (event: CalendarEvent) => void;
@@ -48,7 +50,6 @@ export function EventEditor({
       visibility: isPrivate ? "private" : "relationship",
       participantUserIds: selectedUser && includesSelectedUser ? [selectedUser.id] : []
     });
-    onClose();
   }
 
   return (
@@ -60,6 +61,8 @@ export function EventEditor({
             ×
           </button>
         </div>
+
+        {notice ? <p className="editorNotice">{notice}</p> : null}
 
         <label className="editorField">
           Title

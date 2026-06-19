@@ -91,9 +91,12 @@ Copy `.env.example` to `.env.local` and fill:
 ```powershell
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash
 ```
 
 When both variables are present, the app uses Supabase Auth, database CRUD, and realtime sync. Without them, it uses local mock users and events.
+`GEMINI_API_KEY` enables the AI natural-language event parser. `GEMINI_MODEL` is optional and defaults to `gemini-3.5-flash`.
 
 ## Supabase Setup
 
