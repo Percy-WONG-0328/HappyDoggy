@@ -42,8 +42,7 @@ export function createMockEvents(dateKey: string): CalendarEvent[] {
     makeEvent("evt_shared_date", "Evening plan", dateKey, 19 * 60, dateKey, 21 * 60, "Date", "#d84f83", users[1].id, "relationship", [currentUser.id]),
     makeEvent("evt_cross_midnight", "Late project", previousDate, 23 * 60 + 30, dateKey, 1 * 60 + 30, "Work", "#7a5cff", currentUser.id),
     makeEvent("evt_cross_overlap", "Night reset", dateKey, 0 * 60 + 45, dateKey, 2 * 60, "Health", "#697386", currentUser.id),
-    makeEvent("evt_tomorrow_carry", "Travel prep", dateKey, 22 * 60 + 15, nextDate, 1 * 60, "Life", "#2f6df6", users[1].id),
-    makeEvent("evt_all_day", "Anniversary", dateKey, 0, nextDate, 0, "Date", "#d84f83", currentUser.id, "relationship", [users[1].id], true)
+    makeEvent("evt_tomorrow_carry", "Travel prep", dateKey, 22 * 60 + 15, nextDate, 1 * 60, "Life", "#2f6df6", users[1].id)
   ];
 }
 
