@@ -90,7 +90,9 @@ export default function Home() {
   const [appUsers, setAppUsers] = useState(mockUsers);
   const [currentUserId, setCurrentUserId] = useState(mockCurrentUser.id);
   const [selectedUserId, setSelectedUserId] = useState(mockUsers[1].id);
-  const [events, setEvents] = useState(() => createMockEvents(getLocalDateKey(new Date(), timezone)));
+  const [events, setEvents] = useState<CalendarEvent[]>(() =>
+    cloudEnabled ? [] : createMockEvents(getLocalDateKey(new Date(), timezone))
+  );
   const [draft, setDraft] = useState<DraftRange | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [mobileCreateLane, setMobileCreateLane] = useState<RenderLane | null>(null);
@@ -300,6 +302,8 @@ export default function Home() {
     setIsLoading(true);
     setStatusTone("error");
     setStatusMessage("");
+    restoreEvents([]);
+    setWeekEvents([]);
 
     try {
       const sessionUser = await getCurrentSessionUser();
@@ -423,7 +427,8 @@ export default function Home() {
     setCurrentUserId(mockCurrentUser.id);
     setAppUsers(mockUsers);
     setRelationshipInvites([]);
-    setEvents(createMockEvents(dateKey));
+    setWeekEvents([]);
+    restoreEvents([]);
     setStatusMessage("");
   }
 
@@ -484,7 +489,12 @@ export default function Home() {
     setDraft(null);
     setEditingEventId(null);
 
-    if (cloudEnabled && currentUserId !== mockCurrentUser.id) {
+    if (cloudEnabled) {
+      restoreEvents([]);
+      setWeekEvents([]);
+
+      if (currentUserId === mockCurrentUser.id) return;
+
       try {
         await refreshCloudEvents(nextDateKey);
       } catch (error) {
