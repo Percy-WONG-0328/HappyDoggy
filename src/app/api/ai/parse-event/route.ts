@@ -78,8 +78,8 @@ export async function POST(request: Request) {
           }
         ],
         temperature: 0.1,
-        max_output_tokens: hasImage ? 2048 : 1024,
-        reasoning: { effort: hasImage ? "low" : "minimal" }
+        max_output_tokens: 1024,
+        reasoning: { effort: "minimal" }
       }),
       signal: controller.signal
     });
