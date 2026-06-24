@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+const ARK_MODEL = process.env.ARK_MODEL?.trim() || "doubao-seed-2-1-pro-260628";
+const ARK_RESPONSES_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
 const CATEGORY_OPTIONS = ["Life", "Study", "Date", "Work", "Health", "Other"];
 
 type ParseRequest = {
@@ -11,18 +12,20 @@ type ParseRequest = {
   partnerName?: unknown;
 };
 
-type GeminiResponse = {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{ text?: string }>;
-    };
+type ArkResponse = {
+  output_text?: string;
+  output?: Array<{
+    content?: Array<{
+      text?: string;
+      output_text?: string;
+    }>;
   }>;
 };
 
 export async function POST(request: Request) {
-  const apiKey = process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_GEMINI_API_KEY?.trim();
+  const apiKey = process.env.ARK_API_KEY?.trim();
   if (!apiKey) {
-    return NextResponse.json({ error: "Gemini API key is not configured." }, { status: 500 });
+    return NextResponse.json({ error: "Ark API key is not configured." }, { status: 500 });
   }
 
   let payload: ParseRequest;
@@ -44,25 +47,28 @@ export async function POST(request: Request) {
   const prompt = buildPrompt({ text, now, timezone, currentDate, partnerName });
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: "application/json"
+    const response = await fetch(ARK_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: ARK_MODEL,
+        input: [
+          {
+            role: "user",
+            content: [{ type: "input_text", text: prompt }]
           }
-        })
-      }
-    );
+        ],
+        temperature: 0.1
+      })
+    });
 
     if (!response.ok) {
-      console.error("Gemini API request failed", {
+      console.error("Ark API request failed", {
         status: response.status,
-        model: GEMINI_MODEL
+        model: ARK_MODEL
       });
       return NextResponse.json(
         { error: "AI parse request failed.", upstreamStatus: response.status },
@@ -70,9 +76,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const gemini = (await response.json()) as GeminiResponse;
-    const rawText = gemini.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim() ?? "";
-    const parsed = parseGeminiJson(rawText);
+    const ark = (await response.json()) as ArkResponse;
+    const parsed = parseModelJson(extractArkText(ark));
 
     if (!parsed) {
       return NextResponse.json(getFallbackResult(text, false));
@@ -119,7 +124,21 @@ function buildPrompt({
   ].join("\n");
 }
 
-function parseGeminiJson(rawText: string) {
+function extractArkText(response: ArkResponse) {
+  if (typeof response.output_text === "string" && response.output_text.trim()) {
+    return response.output_text.trim();
+  }
+
+  return (
+    response.output
+      ?.flatMap((item) => item.content ?? [])
+      .map((item) => item.text ?? item.output_text ?? "")
+      .join("")
+      .trim() ?? ""
+  );
+}
+
+function parseModelJson(rawText: string) {
   if (!rawText) return null;
   const cleaned = rawText
     .replace(/^```json\s*/i, "")
