@@ -95,11 +95,25 @@ type AiParsedEvent = {
   is_all_day?: boolean | null;
   parsed?: boolean;
   source_text?: string | null;
+  debug?: AiParseDebug;
 };
 
 type AiImageInput = {
   dataUrl: string;
   name: string;
+  debugMetadata?: {
+    width: number;
+    height: number;
+    compressionApplied: boolean;
+    processing: string;
+  };
+};
+
+type AiParseDebug = Record<string, unknown> & {
+  image?: Record<string, unknown> & { dataUrl?: string };
+  timing?: Record<string, unknown>;
+  stages?: Record<string, unknown>;
+  fallbacks?: Record<string, unknown>;
 };
 
 export default function Home() {
@@ -130,6 +144,8 @@ export default function Home() {
   const [aiImage, setAiImage] = useState<AiImageInput | null>(null);
   const [isAiParsing, setIsAiParsing] = useState(false);
   const [isAiImagePreparing, setIsAiImagePreparing] = useState(false);
+  const [aiDebugMode, setAiDebugMode] = useState(false);
+  const [aiDebugData, setAiDebugData] = useState<AiParseDebug | null>(null);
   const [unsavedDraftEventId, setUnsavedDraftEventId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(cloudEnabled);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -146,6 +162,11 @@ export default function Home() {
   const isRefreshingRef = useRef(false);
   const saveStatusTimerRef = useRef<number | null>(null);
   const deleteTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    // TEMP AI IMAGE DIAGNOSTICS: URL-gated and removable with the debug panel.
+    setAiDebugMode(new URLSearchParams(window.location.search).get("debug") === "1");
+  }, []);
 
   const currentUser = appUsers.find((user) => user.id === currentUserId) ?? appUsers[0] ?? mockCurrentUser;
   const selectedUser =
@@ -536,8 +557,8 @@ export default function Home() {
     setStatusMessage("");
 
     try {
-      const dataUrl = await prepareAiImage(file);
-      setAiImage({ dataUrl, name: file.name || "Selected image" });
+      const prepared = await prepareAiImage(file, aiDebugMode);
+      setAiImage({ ...prepared, name: file.name || "Selected image" });
     } catch (error) {
       setStatusTone("error");
       setStatusMessage(getErrorMessage(error) || "Could not prepare that image.");
@@ -554,18 +575,21 @@ export default function Home() {
 
     setIsAiParsing(true);
     setStatusMessage("");
+    const debugRequest = aiDebugMode && Boolean(image);
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 10_000);
+    const clientStartedAt = performance.now();
+    const timeout = window.setTimeout(() => controller.abort(), debugRequest ? 65_000 : 10_000);
     const fallbackTitle = text || "Image event";
 
     try {
-      const response = await fetch("/api/ai/parse-event", {
+      const response = await fetch(debugRequest ? "/api/ai/parse-event?debug=1" : "/api/ai/parse-event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
           text,
           imageDataUrl: image?.dataUrl,
+          imageDebugMetadata: debugRequest ? image?.debugMetadata : undefined,
           now: new Date().toISOString(),
           timezone,
           currentDate: dateKey,
@@ -574,17 +598,49 @@ export default function Home() {
       });
 
       if (!response.ok) {
+        if (debugRequest) {
+          const failedPayload = (await response.json().catch(() => null)) as AiParsedEvent | null;
+          if (failedPayload?.debug) {
+            const completedDebug = completeAiParseDebug(
+              failedPayload.debug,
+              null,
+              performance.now() - clientStartedAt,
+              false
+            );
+            console.log("[AI_IMAGE_PARSE_DEBUG]", completedDebug);
+            setAiDebugData(completedDebug);
+          }
+        }
         throw new Error("Parse failed, please retry or add manually.");
       }
 
       const parsed = (await response.json()) as AiParsedEvent;
-      openAiDraft(fallbackTitle, parsed);
+      const finalDraft = openAiDraft(fallbackTitle, parsed);
+      if (debugRequest && parsed.debug) {
+        const completedDebug = completeAiParseDebug(
+          parsed.debug,
+          finalDraft,
+          performance.now() - clientStartedAt,
+          false
+        );
+        console.log("[AI_IMAGE_PARSE_DEBUG]", completedDebug);
+        setAiDebugData(completedDebug);
+      }
       setAiInput("");
       setAiImage(null);
       setAiComposerOpen(false);
     } catch (error) {
       if (isAbortError(error)) {
-        openAiDraft(fallbackTitle, getEmptyAiDraft(fallbackTitle));
+        const finalDraft = openAiDraft(fallbackTitle, getEmptyAiDraft(fallbackTitle));
+        if (debugRequest && image) {
+          const completedDebug = createClientTimeoutDebug(
+            image,
+            finalDraft,
+            performance.now() - clientStartedAt
+          );
+          console.log("[AI_IMAGE_PARSE_DEBUG]", completedDebug);
+          setAiDebugData(completedDebug);
+        }
         setAiInput("");
         setAiImage(null);
         setAiComposerOpen(false);
@@ -639,6 +695,26 @@ export default function Home() {
     setEvents(nextEvents);
     setUnsavedDraftEventId(draftEvent.id);
     setEditingEventId(draftEvent.id);
+
+    return {
+      fields: {
+        title,
+        date: timeRange.startDateKey,
+        start_time: formatDebugClock(timeRange.startMinutes),
+        end_time: formatDebugClock(timeRange.endMinutes),
+        category,
+        include_partner: includePartner,
+        is_all_day: timeRange.isAllDay,
+        source_text: sourceText || null
+      },
+      fallbacks: {
+        missingDateDefault: !hasParsedDate,
+        missingStartTimeDefault: startTime === null,
+        missingEndTimeDefault: parsedEndTime === null,
+        missingTitleDefault: !parsed.title?.trim(),
+        oneHourRuleApplied: startTime !== null && !inputHasExplicitTimeRange(sourceText)
+      }
+    };
   }
 
   function closeEditor() {
@@ -1267,6 +1343,10 @@ export default function Home() {
           onSubmit={handleAiComposerSubmit}
         />
       ) : null}
+
+      {aiDebugMode && aiDebugData ? (
+        <AiParseDebugPanel debug={aiDebugData} onClose={() => setAiDebugData(null)} />
+      ) : null}
     </main>
   );
 }
@@ -1364,6 +1444,45 @@ function AiEventComposer({
         </div>
       </form>
     </div>
+  );
+}
+
+// TEMP AI IMAGE DIAGNOSTICS: remove with the debug response path after replay.
+function AiParseDebugPanel({ debug, onClose }: { debug: AiParseDebug; onClose: () => void }) {
+  const imageDataUrl = typeof debug.image?.dataUrl === "string" ? debug.image.dataUrl : "";
+  const readableDebug = {
+    ...debug,
+    image: debug.image
+      ? {
+          ...debug.image,
+          dataUrl: imageDataUrl ? `[captured data URL: ${imageDataUrl.length} characters]` : null
+        }
+      : null
+  };
+  const readableJson = JSON.stringify(readableDebug, null, 2);
+  const fullJson = JSON.stringify(debug, null, 2);
+
+  function copyDebug(value: string) {
+    navigator.clipboard.writeText(value).catch(() => undefined);
+  }
+
+  return (
+    <details className="aiDebugPanel" open>
+      <summary>AI image debug capture</summary>
+      <div className="aiDebugPanelBody">
+        <div className="aiDebugPanelActions">
+          <button type="button" onClick={() => copyDebug(readableJson)}>Copy report</button>
+          <button type="button" onClick={() => copyDebug(fullJson)}>Copy full JSON</button>
+          <button type="button" onClick={onClose}>Close</button>
+        </div>
+        {imageDataUrl ? <img src={imageDataUrl} alt="Image transmitted to Ark" /> : null}
+        <pre>{readableJson}</pre>
+        <details>
+          <summary>Full JSON including image data URL</summary>
+          <pre>{fullJson}</pre>
+        </details>
+      </div>
+    </details>
   );
 }
 
@@ -1807,14 +1926,128 @@ function getEmptyAiDraft(title: string): AiParsedEvent {
   };
 }
 
-async function prepareAiImage(file: File) {
+type FinalDraftDebug = {
+  fields: Record<string, unknown>;
+  fallbacks: Record<string, boolean>;
+};
+
+function completeAiParseDebug(
+  debug: AiParseDebug,
+  finalDraft: FinalDraftDebug | null,
+  clientElapsedMs: number,
+  clientTimeoutFallback: boolean
+): AiParseDebug {
+  const timing = isDebugRecord(debug.timing) ? debug.timing : {};
+  const stages = isDebugRecord(debug.stages) ? debug.stages : {};
+  const fallbacks = isDebugRecord(debug.fallbacks) ? debug.fallbacks : {};
+  const finalFallbacks = finalDraft?.fallbacks ?? {};
+
+  return {
+    ...debug,
+    timing: {
+      ...timing,
+      clientElapsedMs: Math.round(clientElapsedMs),
+      originalClientTimeoutMs: 10_000,
+      debugClientTimeoutMs: 65_000,
+      originalClientTimeoutWouldHaveFired: clientElapsedMs > 10_000
+    },
+    stages: {
+      ...stages,
+      finalDraft: finalDraft?.fields ?? null
+    },
+    fallbacks: {
+      ...fallbacks,
+      ...finalFallbacks,
+      missingTitleDefault: fallbacks.missingTitleDefault === true || finalFallbacks.missingTitleDefault === true,
+      missingEndTimeDefault: fallbacks.missingEndTimeDefault === true || finalFallbacks.missingEndTimeDefault === true,
+      oneHourRuleApplied: fallbacks.oneHourRuleApplied === true || finalFallbacks.oneHourRuleApplied === true,
+      clientTimeoutFallback
+    }
+  };
+}
+
+function createClientTimeoutDebug(
+  image: AiImageInput,
+  finalDraft: FinalDraftDebug,
+  clientElapsedMs: number
+): AiParseDebug {
+  const metadata = image.debugMetadata;
+  return completeAiParseDebug(
+    {
+      temporaryImageParseDiagnostics: true,
+      timing: {},
+      image: {
+        byteSize: getDataUrlByteSize(image.dataUrl),
+        width: metadata?.width ?? null,
+        height: metadata?.height ?? null,
+        sha256Short: null,
+        compressionApplied: metadata?.compressionApplied ?? null,
+        processing: metadata?.processing ?? "unknown",
+        dataUrl: image.dataUrl
+      },
+      ark: {
+        model: null,
+        httpStatus: null,
+        rawResponseBodyValidJson: false,
+        rawResponseBody: null
+      },
+      stages: {
+        rawModelJson: null,
+        serverNormalized: null,
+        finalDraft: null
+      },
+      fallbacks: {
+        serverTimeoutFallback: null,
+        jsonParseFailureFallback: null,
+        clientTimeoutFallback: true,
+        missingDateDefault: null,
+        missingStartTimeDefault: null,
+        missingEndTimeDefault: null,
+        missingTitleDefault: true,
+        oneHourRuleApplied: null
+      }
+    },
+    finalDraft,
+    clientElapsedMs,
+    true
+  );
+}
+
+function isDebugRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getDataUrlByteSize(dataUrl: string) {
+  const encoded = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((encoded.length * 3) / 4) - padding);
+}
+
+function formatDebugClock(minutes: number) {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
+}
+
+async function prepareAiImage(file: File, captureDebugMetadata: boolean) {
   if (!file.type.startsWith("image/")) {
     throw new Error("Please choose an image file.");
   }
 
   const source = await readFileAsDataUrl(file);
   const supportedSource = /^data:image\/(?:jpeg|png|webp);base64,/i.test(source);
-  if (supportedSource && source.length <= 3_300_000) return source;
+  if (supportedSource && source.length <= 3_300_000) {
+    if (!captureDebugMetadata) return { dataUrl: source };
+    const originalImage = await loadBrowserImage(source);
+    return {
+      dataUrl: source,
+      debugMetadata: {
+        width: originalImage.naturalWidth,
+        height: originalImage.naturalHeight,
+        compressionApplied: false,
+        processing: "original image passed through unchanged"
+      }
+    };
+  }
 
   const image = await loadBrowserImage(source);
   const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
@@ -1830,7 +2063,19 @@ async function prepareAiImage(file: File) {
     throw new Error("That image is too large. Please choose a smaller image.");
   }
 
-  return compressed;
+  return {
+    dataUrl: compressed,
+    ...(captureDebugMetadata
+      ? {
+          debugMetadata: {
+            width: canvas.width,
+            height: canvas.height,
+            compressionApplied: true,
+            processing: "resized to max 1600px and re-encoded as JPEG q0.84"
+          }
+        }
+      : {})
+  };
 }
 
 function readFileAsDataUrl(file: File) {

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 
 const ARK_VISION_MODEL = process.env.ARK_MODEL?.trim() || "doubao-seed-2-1-pro-260628";
 const ARK_TEXT_MODEL = process.env.ARK_TEXT_MODEL?.trim() || ARK_VISION_MODEL;
 const ARK_RESPONSES_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
 const AI_TIMEOUT_MS = 9_000;
+const DEBUG_AI_TIMEOUT_MS = 60_000;
 const MAX_IMAGE_DATA_URL_LENGTH = 3_500_000;
 const CATEGORY_OPTIONS = ["Life", "Study", "Date", "Work", "Health", "Other"];
 
@@ -14,6 +16,14 @@ type ParseRequest = {
   currentDate?: unknown;
   partnerName?: unknown;
   imageDataUrl?: unknown;
+  imageDebugMetadata?: unknown;
+};
+
+type ImageDebugMetadata = {
+  width?: unknown;
+  height?: unknown;
+  compressionApplied?: unknown;
+  processing?: unknown;
 };
 
 type ArkResponse = {
@@ -42,6 +52,8 @@ export async function POST(request: Request) {
   const text = typeof payload.text === "string" ? payload.text.trim() : "";
   const imageDataUrl = typeof payload.imageDataUrl === "string" ? payload.imageDataUrl : "";
   const hasImage = isSupportedImageDataUrl(imageDataUrl);
+  // TEMP AI IMAGE DIAGNOSTICS: remove this gated path after the controlled replay.
+  const debugMode = hasImage && new URL(request.url).searchParams.get("debug") === "1";
   if (!text && !hasImage) {
     return NextResponse.json({ error: "Missing event input." }, { status: 400 });
   }
@@ -57,7 +69,8 @@ export async function POST(request: Request) {
   const prompt = buildPrompt({ text, now, timezone, currentDate, partnerName, hasImage });
   const model = hasImage ? ARK_VISION_MODEL : ARK_TEXT_MODEL;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), debugMode ? DEBUG_AI_TIMEOUT_MS : AI_TIMEOUT_MS);
+  const arkStartedAt = Date.now();
 
   try {
     const response = await fetch(ARK_RESPONSES_URL, {
@@ -84,7 +97,7 @@ export async function POST(request: Request) {
       signal: controller.signal
     });
 
-    if (!response.ok) {
+    if (!debugMode && !response.ok) {
       console.error("Ark API request failed", {
         status: response.status,
         model
@@ -95,17 +108,75 @@ export async function POST(request: Request) {
       );
     }
 
-    const ark = (await response.json()) as ArkResponse;
-    const parsed = parseModelJson(extractArkText(ark));
+    let rawArkResponseBody: string | null = null;
+    let ark: ArkResponse | null = null;
+    if (debugMode) {
+      rawArkResponseBody = await response.text();
+      try {
+        ark = JSON.parse(rawArkResponseBody) as ArkResponse;
+      } catch {
+        ark = null;
+      }
+    } else {
+      ark = (await response.json()) as ArkResponse;
+    }
 
-    if (!parsed) {
+    const arkElapsedMs = Date.now() - arkStartedAt;
+    const rawModelJson = ark ? parseModelJson(extractArkText(ark)) : null;
+    const normalized = rawModelJson
+      ? normalizeParsedResult(rawModelJson, fallbackTitle, hasImage ? null : text)
+      : getFallbackResult(fallbackTitle, false);
+
+    if (debugMode) {
+      const debug = buildImageDebugPayload({
+        imageDataUrl,
+        imageDebugMetadata: payload.imageDebugMetadata,
+        model,
+        arkStatus: response.status,
+        arkElapsedMs,
+        rawArkResponseBody,
+        rawModelJson,
+        normalized,
+        serverTimeoutFallback: false,
+        jsonParseFailureFallback: !rawModelJson
+      });
+
+      if (!response.ok) {
+        return NextResponse.json(
+          { error: "AI parse request failed.", upstreamStatus: response.status, debug },
+          { status: 502 }
+        );
+      }
+
+      return NextResponse.json({ ...normalized, debug });
+    }
+
+    if (!rawModelJson) {
       return NextResponse.json(getFallbackResult(fallbackTitle, false));
     }
 
-    return NextResponse.json(normalizeParsedResult(parsed, fallbackTitle, hasImage ? null : text));
+    return NextResponse.json(normalized);
   } catch (error) {
     if (isAbortError(error)) {
-      return NextResponse.json(getFallbackResult(fallbackTitle, false));
+      const normalized = getFallbackResult(fallbackTitle, false);
+      if (debugMode) {
+        return NextResponse.json({
+          ...normalized,
+          debug: buildImageDebugPayload({
+            imageDataUrl,
+            imageDebugMetadata: payload.imageDebugMetadata,
+            model,
+            arkStatus: null,
+            arkElapsedMs: Date.now() - arkStartedAt,
+            rawArkResponseBody: null,
+            rawModelJson: null,
+            normalized,
+            serverTimeoutFallback: true,
+            jsonParseFailureFallback: false
+          })
+        });
+      }
+      return NextResponse.json(normalized);
     }
     return NextResponse.json({ error: "AI parse request failed." }, { status: 502 });
   } finally {
@@ -216,6 +287,99 @@ function getFallbackResult(originalText: string, parsed: boolean) {
     is_all_day: false,
     source_text: null
   };
+}
+
+// TEMP AI IMAGE DIAGNOSTICS: isolated payload for one controlled replay.
+function buildImageDebugPayload({
+  imageDataUrl,
+  imageDebugMetadata,
+  model,
+  arkStatus,
+  arkElapsedMs,
+  rawArkResponseBody,
+  rawModelJson,
+  normalized,
+  serverTimeoutFallback,
+  jsonParseFailureFallback
+}: {
+  imageDataUrl: string;
+  imageDebugMetadata: unknown;
+  model: string;
+  arkStatus: number | null;
+  arkElapsedMs: number;
+  rawArkResponseBody: string | null;
+  rawModelJson: Record<string, unknown> | null;
+  normalized: ReturnType<typeof getFallbackResult> | ReturnType<typeof normalizeParsedResult>;
+  serverTimeoutFallback: boolean;
+  jsonParseFailureFallback: boolean;
+}) {
+  const metadata = isRecord(imageDebugMetadata) ? imageDebugMetadata as ImageDebugMetadata : {};
+  const encodedImage = imageDataUrl.slice(imageDataUrl.indexOf(",") + 1);
+  const imageBytes = Buffer.from(encodedImage, "base64");
+  const rawResponseBodyValidJson = rawArkResponseBody !== null && isValidJson(rawArkResponseBody);
+  const missingTitleDefault = !rawModelJson || typeof rawModelJson.title !== "string" || !rawModelJson.title.trim();
+  const rawStartTime = rawModelJson && typeof rawModelJson.start_time === "string" && isClockTime(rawModelJson.start_time)
+    ? rawModelJson.start_time
+    : null;
+  const rawEndTime = rawModelJson && typeof rawModelJson.end_time === "string" && isClockTime(rawModelJson.end_time)
+    ? rawModelJson.end_time
+    : null;
+  const rawSourceText = rawModelJson && typeof rawModelJson.source_text === "string" ? rawModelJson.source_text : "";
+  const oneHourRuleApplied = Boolean(rawStartTime && !hasExplicitTimeRange(rawSourceText));
+
+  return {
+    temporaryImageParseDiagnostics: true,
+    capturedAt: new Date().toISOString(),
+    timing: {
+      arkElapsedMs,
+      originalServerTimeoutMs: AI_TIMEOUT_MS,
+      debugServerTimeoutMs: DEBUG_AI_TIMEOUT_MS,
+      originalTimeoutWouldHaveFired: arkElapsedMs > AI_TIMEOUT_MS
+    },
+    image: {
+      byteSize: imageBytes.byteLength,
+      width: typeof metadata.width === "number" ? metadata.width : null,
+      height: typeof metadata.height === "number" ? metadata.height : null,
+      sha256Short: createHash("sha256").update(imageBytes).digest("hex").slice(0, 16),
+      compressionApplied: metadata.compressionApplied === true,
+      processing: typeof metadata.processing === "string" ? metadata.processing : "unknown",
+      dataUrl: imageDataUrl
+    },
+    ark: {
+      model,
+      httpStatus: arkStatus,
+      rawResponseBodyValidJson,
+      rawResponseBody: rawArkResponseBody
+    },
+    stages: {
+      rawModelJson,
+      serverNormalized: normalized,
+      finalDraft: null
+    },
+    fallbacks: {
+      serverTimeoutFallback,
+      jsonParseFailureFallback,
+      clientTimeoutFallback: null,
+      missingDateDefault: null,
+      missingStartTimeDefault: null,
+      missingEndTimeDefault: Boolean(rawStartTime && !rawEndTime),
+      missingTitleDefault,
+      oneHourRuleApplied
+    }
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isValidJson(value: string) {
+  try {
+    JSON.parse(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function hasExplicitTimeRange(text: string) {
