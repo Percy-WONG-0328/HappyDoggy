@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-3.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
 const CATEGORY_OPTIONS = ["Life", "Study", "Date", "Work", "Health", "Other"];
 
 type ParseRequest = {
@@ -60,6 +60,10 @@ export async function POST(request: Request) {
     );
 
     if (!response.ok) {
+      console.error("Gemini API request failed", {
+        status: response.status,
+        model: GEMINI_MODEL
+      });
       return NextResponse.json({ error: "AI parse request failed." }, { status: 502 });
     }
 
