@@ -1790,7 +1790,7 @@ function inputMentionsPartner(input: string, selectedUser: CalendarUser) {
 }
 
 function inputHasExplicitTimeRange(input: string) {
-  return /(?:\bfrom\s+.+?\s+to\s+|\buntil\s+|\btill\s+|\d\s*(?:-|\u2013|\u2014|~|\uFF5E)\s*\d|\d[^\n,;]*?\bto\s+\d|(?:\u70B9|\u65F6|:\d{2})\s*(?:\u5230|\u81F3)\s*\d)/i.test(input);
+  return /\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|\u70B9|\u65F6)?\s*(?:-|\u2013|\u2014|~|\uFF5E|\bto\b|\buntil\b|\btill\b|\u5230|\u81F3)\s*\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|\u70B9|\u65F6)?/i.test(input);
 }
 
 function getEmptyAiDraft(title: string): AiParsedEvent {
