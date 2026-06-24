@@ -64,7 +64,10 @@ export async function POST(request: Request) {
         status: response.status,
         model: GEMINI_MODEL
       });
-      return NextResponse.json({ error: "AI parse request failed." }, { status: 502 });
+      return NextResponse.json(
+        { error: "AI parse request failed.", upstreamStatus: response.status },
+        { status: 502 }
+      );
     }
 
     const gemini = (await response.json()) as GeminiResponse;
