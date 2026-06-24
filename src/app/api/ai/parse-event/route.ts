@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
-const ARK_MODEL = process.env.ARK_MODEL?.trim() || "doubao-seed-2-1-pro-260628";
+const ARK_TEXT_MODEL = process.env.ARK_TEXT_MODEL?.trim() || "doubao-seed-1-6-lite-250615";
+const ARK_VISION_MODEL = process.env.ARK_MODEL?.trim() || "doubao-seed-2-1-pro-260628";
 const ARK_RESPONSES_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
+const AI_TIMEOUT_MS = 9_000;
+const MAX_IMAGE_DATA_URL_LENGTH = 3_500_000;
 const CATEGORY_OPTIONS = ["Life", "Study", "Date", "Work", "Health", "Other"];
 
 type ParseRequest = {
@@ -10,6 +13,7 @@ type ParseRequest = {
   timezone?: unknown;
   currentDate?: unknown;
   partnerName?: unknown;
+  imageDataUrl?: unknown;
 };
 
 type ArkResponse = {
@@ -36,15 +40,24 @@ export async function POST(request: Request) {
   }
 
   const text = typeof payload.text === "string" ? payload.text.trim() : "";
-  if (!text) {
-    return NextResponse.json({ error: "Missing event text." }, { status: 400 });
+  const imageDataUrl = typeof payload.imageDataUrl === "string" ? payload.imageDataUrl : "";
+  const hasImage = isSupportedImageDataUrl(imageDataUrl);
+  if (!text && !hasImage) {
+    return NextResponse.json({ error: "Missing event input." }, { status: 400 });
+  }
+  if (imageDataUrl && !hasImage) {
+    return NextResponse.json({ error: "Unsupported or oversized image." }, { status: 400 });
   }
 
   const now = typeof payload.now === "string" ? payload.now : new Date().toISOString();
   const timezone = typeof payload.timezone === "string" ? payload.timezone : "Asia/Hong_Kong";
   const currentDate = typeof payload.currentDate === "string" ? payload.currentDate : "";
   const partnerName = typeof payload.partnerName === "string" ? payload.partnerName : "";
-  const prompt = buildPrompt({ text, now, timezone, currentDate, partnerName });
+  const fallbackTitle = text || "Image event";
+  const prompt = buildPrompt({ text, now, timezone, currentDate, partnerName, hasImage });
+  const model = hasImage ? ARK_VISION_MODEL : ARK_TEXT_MODEL;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
 
   try {
     const response = await fetch(ARK_RESPONSES_URL, {
@@ -54,23 +67,27 @@ export async function POST(request: Request) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: ARK_MODEL,
+        model,
         input: [
           {
             role: "user",
-            content: [{ type: "input_text", text: prompt }]
+            content: [
+              ...(hasImage ? [{ type: "input_image", image_url: imageDataUrl }] : []),
+              { type: "input_text", text: prompt }
+            ]
           }
         ],
         temperature: 0.1,
-        max_output_tokens: 2048,
-        reasoning: { effort: "low" }
-      })
+        max_output_tokens: hasImage ? 2048 : 512,
+        ...(hasImage ? { reasoning: { effort: "low" } } : {})
+      }),
+      signal: controller.signal
     });
 
     if (!response.ok) {
       console.error("Ark API request failed", {
         status: response.status,
-        model: ARK_MODEL
+        model
       });
       return NextResponse.json(
         { error: "AI parse request failed.", upstreamStatus: response.status },
@@ -82,12 +99,17 @@ export async function POST(request: Request) {
     const parsed = parseModelJson(extractArkText(ark));
 
     if (!parsed) {
-      return NextResponse.json(getFallbackResult(text, false));
+      return NextResponse.json(getFallbackResult(fallbackTitle, false));
     }
 
-    return NextResponse.json(normalizeParsedResult(parsed, text));
-  } catch {
+    return NextResponse.json(normalizeParsedResult(parsed, fallbackTitle, hasImage ? null : text));
+  } catch (error) {
+    if (isAbortError(error)) {
+      return NextResponse.json(getFallbackResult(fallbackTitle, false));
+    }
     return NextResponse.json({ error: "AI parse request failed." }, { status: 502 });
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -96,16 +118,20 @@ function buildPrompt({
   now,
   timezone,
   currentDate,
-  partnerName
+  partnerName,
+  hasImage
 }: {
   text: string;
   now: string;
   timezone: string;
   currentDate: string;
   partnerName: string;
+  hasImage: boolean;
 }) {
   return [
-    "Parse one natural-language calendar event into JSON only.",
+    hasImage
+      ? "Extract one calendar event from the supplied image and optional user text into JSON only."
+      : "Parse one natural-language calendar event into JSON only.",
     "Do not include markdown, comments, or explanatory text.",
     `User local datetime ISO: ${now}`,
     `User timezone: ${timezone}`,
@@ -113,7 +139,7 @@ function buildPrompt({
     partnerName ? `Partner display name: ${partnerName}` : "Partner display name: none",
     `Allowed categories: ${CATEGORY_OPTIONS.join(", ")}`,
     "Return exactly these keys:",
-    '{ "title": string|null, "date": "YYYY-MM-DD"|null, "start_time": "HH:mm"|null, "end_time": "HH:mm"|null, "category": string|null, "include_partner": boolean, "is_all_day": boolean }',
+    '{ "title": string|null, "date": "YYYY-MM-DD"|null, "start_time": "HH:mm"|null, "end_time": "HH:mm"|null, "category": string|null, "include_partner": boolean, "is_all_day": boolean, "source_text": string|null }',
     "Rules:",
     "- If the event title is unclear, use the original input as title.",
     "- Resolve relative dates using the supplied local datetime.",
@@ -122,7 +148,8 @@ function buildPrompt({
     "- include_partner must be true only when the input explicitly mentions the partner display name.",
     "- If there is a date but no specific time, set is_all_day true.",
     "- If no usable date or time is present, set date/start_time/end_time null and keep title.",
-    `Input: ${text}`
+    "- source_text must contain the relevant text read from the image, or the original text input.",
+    text ? `Input: ${text}` : "Input: image only"
   ].join("\n");
 }
 
@@ -155,22 +182,25 @@ function parseModelJson(rawText: string) {
   }
 }
 
-function normalizeParsedResult(parsed: Record<string, unknown>, originalText: string) {
+function normalizeParsedResult(parsed: Record<string, unknown>, fallbackTitle: string, originalText: string | null) {
   const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim() : originalText;
   const date = typeof parsed.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : null;
   const startTime = typeof parsed.start_time === "string" && isClockTime(parsed.start_time) ? parsed.start_time : null;
-  const endTime = typeof parsed.end_time === "string" && isClockTime(parsed.end_time) ? parsed.end_time : null;
+  const parsedEndTime = typeof parsed.end_time === "string" && isClockTime(parsed.end_time) ? parsed.end_time : null;
+  const sourceText = originalText ?? (typeof parsed.source_text === "string" ? parsed.source_text.trim() : "");
+  const endTime = startTime && !hasExplicitTimeRange(sourceText) ? addOneHour(startTime) : parsedEndTime;
   const category = typeof parsed.category === "string" && CATEGORY_OPTIONS.includes(parsed.category) ? parsed.category : "Life";
 
   return {
     parsed: true,
-    title,
+    title: title || fallbackTitle,
     date,
     start_time: startTime,
     end_time: endTime,
     category,
     include_partner: parsed.include_partner === true,
-    is_all_day: parsed.is_all_day === true
+    is_all_day: parsed.is_all_day === true,
+    source_text: sourceText || null
   };
 }
 
@@ -183,8 +213,27 @@ function getFallbackResult(originalText: string, parsed: boolean) {
     end_time: null,
     category: "Life",
     include_partner: false,
-    is_all_day: false
+    is_all_day: false,
+    source_text: null
   };
+}
+
+function hasExplicitTimeRange(text: string) {
+  return /(?:\bfrom\s+.+?\s+to\s+|\buntil\s+|\btill\s+|\d\s*(?:-|\u2013|\u2014|~|\uFF5E)\s*\d|\d[^\n,;]*?\bto\s+\d|(?:\u70B9|\u65F6|:\d{2})\s*(?:\u5230|\u81F3)\s*\d)/i.test(text);
+}
+
+function addOneHour(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  const nextHours = (hours + 1) % 24;
+  return `${String(nextHours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function isSupportedImageDataUrl(value: string) {
+  return value.length <= MAX_IMAGE_DATA_URL_LENGTH && /^data:image\/(?:jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(value);
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function isClockTime(value: string) {

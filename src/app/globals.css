@@ -1740,6 +1740,69 @@ h2 {
   padding: 12px 14px;
 }
 
+.aiComposerMediaRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin-bottom: 20px;
+}
+
+.aiMediaButton {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+.aiMediaButton svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
+
+.aiImageInput {
+  display: none;
+}
+
+.aiImageSelection {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  flex: 1;
+}
+
+.aiImageSelection img {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.aiImageSelection span,
+.aiMediaStatus {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aiImageSelection button {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+}
+
 .aiComposerActions {
   display: flex;
   gap: 12px;

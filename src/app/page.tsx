@@ -94,6 +94,12 @@ type AiParsedEvent = {
   include_partner?: boolean | null;
   is_all_day?: boolean | null;
   parsed?: boolean;
+  source_text?: string | null;
+};
+
+type AiImageInput = {
+  dataUrl: string;
+  name: string;
 };
 
 export default function Home() {
@@ -121,7 +127,9 @@ export default function Home() {
   const [weekEvents, setWeekEvents] = useState<CalendarEvent[]>([]);
   const [aiComposerOpen, setAiComposerOpen] = useState(false);
   const [aiInput, setAiInput] = useState("");
+  const [aiImage, setAiImage] = useState<AiImageInput | null>(null);
   const [isAiParsing, setIsAiParsing] = useState(false);
+  const [isAiImagePreparing, setIsAiImagePreparing] = useState(false);
   const [unsavedDraftEventId, setUnsavedDraftEventId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(cloudEnabled);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -523,20 +531,41 @@ export default function Home() {
     setEvents(createMockEvents(nextDateKey));
   }
 
+  async function handleAiImageSelect(file: File) {
+    setIsAiImagePreparing(true);
+    setStatusMessage("");
+
+    try {
+      const dataUrl = await prepareAiImage(file);
+      setAiImage({ dataUrl, name: file.name || "Selected image" });
+    } catch (error) {
+      setStatusTone("error");
+      setStatusMessage(getErrorMessage(error) || "Could not prepare that image.");
+    } finally {
+      setIsAiImagePreparing(false);
+    }
+  }
+
   async function handleAiComposerSubmit(submitEvent: React.FormEvent<HTMLFormElement>) {
     submitEvent.preventDefault();
     const text = aiInput.trim();
-    if (!text || isAiParsing) return;
+    const image = aiImage;
+    if ((!text && !image) || isAiParsing || isAiImagePreparing) return;
 
     setIsAiParsing(true);
     setStatusMessage("");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
+    const fallbackTitle = text || "Image event";
 
     try {
       const response = await fetch("/api/ai/parse-event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           text,
+          imageDataUrl: image?.dataUrl,
           now: new Date().toISOString(),
           timezone,
           currentDate: dateKey,
@@ -549,29 +578,40 @@ export default function Home() {
       }
 
       const parsed = (await response.json()) as AiParsedEvent;
-      openAiDraft(text, parsed);
+      openAiDraft(fallbackTitle, parsed);
       setAiInput("");
+      setAiImage(null);
       setAiComposerOpen(false);
     } catch (error) {
-      setStatusTone("error");
-      setStatusMessage(getErrorMessage(error) || "Parse failed, please retry or add manually.");
+      if (isAbortError(error)) {
+        openAiDraft(fallbackTitle, getEmptyAiDraft(fallbackTitle));
+        setAiInput("");
+        setAiImage(null);
+        setAiComposerOpen(false);
+      } else {
+        setStatusTone("error");
+        setStatusMessage(getErrorMessage(error) || "Parse failed, please retry or add manually.");
+      }
     } finally {
+      window.clearTimeout(timeout);
       setIsAiParsing(false);
     }
   }
 
   function openAiDraft(originalText: string, parsed: AiParsedEvent) {
     const eventDateKey = isDateKey(parsed.date) ? parsed.date : dateKey;
-    const title = parsed.title?.trim() || originalText;
+    const sourceText = parsed.source_text?.trim() || originalText;
+    const title = parsed.title?.trim() || sourceText || originalText;
     const category = normalizeCategory(parsed.category);
     const startTime = parseClockTime(parsed.start_time);
-    const endTime = parseClockTime(parsed.end_time);
+    const parsedEndTime = parseClockTime(parsed.end_time);
+    const endTime = startTime !== null && !inputHasExplicitTimeRange(sourceText) ? (startTime + 60) % 1440 : parsedEndTime;
     const hasParsedDate = isDateKey(parsed.date);
     const hasParsedTime = startTime !== null || endTime !== null;
     const includePartner = Boolean(
       selectedUser &&
         parsed.include_partner &&
-        inputMentionsPartner(originalText, selectedUser)
+        inputMentionsPartner(sourceText, selectedUser)
     );
     const participantUserIds = includePartner && selectedUser ? [selectedUser.id] : [];
     const timeRange = getAiDraftTimeRange(eventDateKey, startTime, endTime, Boolean(parsed.is_all_day), hasParsedDate, hasParsedTime);
@@ -1213,10 +1253,17 @@ export default function Home() {
         <AiEventComposer
           value={aiInput}
           isParsing={isAiParsing}
+          isImagePreparing={isAiImagePreparing}
+          image={aiImage}
           onChange={setAiInput}
           onClose={() => {
-            if (!isAiParsing) setAiComposerOpen(false);
+            if (!isAiParsing) {
+              setAiImage(null);
+              setAiComposerOpen(false);
+            }
           }}
+          onImageSelect={handleAiImageSelect}
+          onImageRemove={() => setAiImage(null)}
           onSubmit={handleAiComposerSubmit}
         />
       ) : null}
@@ -1227,16 +1274,26 @@ export default function Home() {
 function AiEventComposer({
   value,
   isParsing,
+  isImagePreparing,
+  image,
   onChange,
   onClose,
+  onImageSelect,
+  onImageRemove,
   onSubmit
 }: {
   value: string;
   isParsing: boolean;
+  isImagePreparing: boolean;
+  image: AiImageInput | null;
   onChange: (value: string) => void;
   onClose: () => void;
+  onImageSelect: (file: File) => void;
+  onImageRemove: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+
   return (
     <div className="modalLayer" role="dialog" aria-modal="true">
       <form className="editor aiComposer" onSubmit={onSubmit}>
@@ -1257,11 +1314,51 @@ function AiEventComposer({
           />
         </label>
 
+        <div className="aiComposerMediaRow">
+          <button
+            type="button"
+            className="aiMediaButton"
+            aria-label="Add event from image"
+            title="Add image"
+            disabled={isParsing || isImagePreparing}
+            onClick={() => imageInputRef.current?.click()}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <circle cx="8.5" cy="10" r="1.5" />
+              <path d="m21 15-5-5L5 19" />
+            </svg>
+          </button>
+          <input
+            ref={imageInputRef}
+            className="aiImageInput"
+            type="file"
+            accept="image/*"
+            disabled={isParsing || isImagePreparing}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onImageSelect(file);
+              event.target.value = "";
+            }}
+          />
+          {image ? (
+            <div className="aiImageSelection">
+              <img src={image.dataUrl} alt="Selected event source" />
+              <span>{image.name}</span>
+              <button type="button" aria-label="Remove selected image" onClick={onImageRemove} disabled={isParsing}>
+                ×
+              </button>
+            </div>
+          ) : (
+            <span className="aiMediaStatus">{isImagePreparing ? "Preparing image..." : ""}</span>
+          )}
+        </div>
+
         <div className="aiComposerActions">
           <button type="button" className="danger" onClick={onClose} disabled={isParsing}>
             Cancel
           </button>
-          <button type="submit" disabled={isParsing || !value.trim()}>
+          <button type="submit" disabled={isParsing || isImagePreparing || (!value.trim() && !image)}>
             {isParsing ? "Parsing..." : "Create draft"}
           </button>
         </div>
@@ -1690,6 +1787,72 @@ function inputMentionsPartner(input: string, selectedUser: CalendarUser) {
     (displayName && haystack.includes(displayName)) ||
       (emailName && haystack.includes(emailName))
   );
+}
+
+function inputHasExplicitTimeRange(input: string) {
+  return /(?:\bfrom\s+.+?\s+to\s+|\buntil\s+|\btill\s+|\d\s*(?:-|\u2013|\u2014|~|\uFF5E)\s*\d|\d[^\n,;]*?\bto\s+\d|(?:\u70B9|\u65F6|:\d{2})\s*(?:\u5230|\u81F3)\s*\d)/i.test(input);
+}
+
+function getEmptyAiDraft(title: string): AiParsedEvent {
+  return {
+    parsed: false,
+    title,
+    date: null,
+    start_time: null,
+    end_time: null,
+    category: "Life",
+    include_partner: false,
+    is_all_day: false,
+    source_text: null
+  };
+}
+
+async function prepareAiImage(file: File) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Please choose an image file.");
+  }
+
+  const source = await readFileAsDataUrl(file);
+  const supportedSource = /^data:image\/(?:jpeg|png|webp);base64,/i.test(source);
+  if (supportedSource && source.length <= 3_300_000) return source;
+
+  const image = await loadBrowserImage(source);
+  const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Could not prepare that image.");
+
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const compressed = canvas.toDataURL("image/jpeg", 0.84);
+  if (compressed.length > 3_300_000) {
+    throw new Error("That image is too large. Please choose a smaller image.");
+  }
+
+  return compressed;
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(new Error("Could not read that image."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadBrowserImage(source: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("That image format is not supported."));
+    image.src = source;
+  });
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function getWeekDates(dateKey: string) {

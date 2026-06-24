@@ -49,11 +49,12 @@ The current UI redesign is implemented for the main calendar shell: Day View, We
 - Profile page for display name, relationship invites, and account actions.
 - Week View with previous/next week navigation and a scrollable 24-hour grid.
 - Visual "Find Time Together" helper for shared free evening slots.
+- AI-assisted event drafts from natural-language text or an image, confirmed through the existing event editor.
 
 ## Not Done Yet
 
 - Full post-redesign regression testing on real devices for auth, event CRUD, drag, resize, delete Undo, relationship invites, realtime refresh, Week navigation, and Find Time Together.
-- AI-assisted schedule input: text or voice to structured calendar events, with optional ICS generation/import.
+- Voice transcription for AI event drafts, plus ICS generation/import.
 - Custom domain setup for the deployed PWA.
 - Real settings flows for Profile page entries such as categories, notifications, calendar sync, account privacy, and any future preference screens.
 - Week View creation/editing interactions from the grid itself, such as tapping events to edit or tapping empty time to create.
@@ -93,10 +94,11 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ARK_API_KEY=
 ARK_MODEL=doubao-seed-2-1-pro-260628
+ARK_TEXT_MODEL=doubao-seed-1-6-lite-250615
 ```
 
 When both variables are present, the app uses Supabase Auth, database CRUD, and realtime sync. Without them, it uses local mock users and events.
-`ARK_API_KEY` enables the AI natural-language event parser through Volcengine Ark. `ARK_MODEL` is optional and defaults to `doubao-seed-2-1-pro-260628`.
+`ARK_API_KEY` enables AI event parsing through Volcengine Ark. `ARK_TEXT_MODEL` selects the fast text parser and defaults to `doubao-seed-1-6-lite-250615`; `ARK_MODEL` selects the vision model and defaults to `doubao-seed-2-1-pro-260628`.
 
 ## Supabase Setup
 
