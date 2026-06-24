@@ -1150,7 +1150,7 @@ export default function Home() {
             </section>
           </div>
 
-          {editingEvent ? null : (
+          {editingEvent || aiComposerOpen ? null : (
             <div className="dayCreateActions" aria-label="Create event">
               <button
                 type="button"
