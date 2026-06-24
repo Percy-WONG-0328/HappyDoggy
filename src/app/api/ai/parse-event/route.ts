@@ -61,7 +61,9 @@ export async function POST(request: Request) {
             content: [{ type: "input_text", text: prompt }]
           }
         ],
-        temperature: 0.1
+        temperature: 0.1,
+        max_output_tokens: 512,
+        reasoning: { effort: "low" }
       })
     });
 
