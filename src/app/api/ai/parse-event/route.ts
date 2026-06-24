@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-const ARK_TEXT_MODEL = process.env.ARK_TEXT_MODEL?.trim() || "doubao-seed-1-6-lite-250615";
 const ARK_VISION_MODEL = process.env.ARK_MODEL?.trim() || "doubao-seed-2-1-pro-260628";
+const ARK_TEXT_MODEL = process.env.ARK_TEXT_MODEL?.trim() || ARK_VISION_MODEL;
 const ARK_RESPONSES_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
 const AI_TIMEOUT_MS = 9_000;
 const MAX_IMAGE_DATA_URL_LENGTH = 3_500_000;
@@ -78,8 +78,8 @@ export async function POST(request: Request) {
           }
         ],
         temperature: 0.1,
-        max_output_tokens: hasImage ? 2048 : 512,
-        ...(hasImage ? { reasoning: { effort: "low" } } : {})
+        max_output_tokens: hasImage ? 2048 : 1024,
+        reasoning: { effort: hasImage ? "low" : "minimal" }
       }),
       signal: controller.signal
     });

@@ -94,11 +94,11 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ARK_API_KEY=
 ARK_MODEL=doubao-seed-2-1-pro-260628
-ARK_TEXT_MODEL=doubao-seed-1-6-lite-250615
+ARK_TEXT_MODEL=
 ```
 
 When both variables are present, the app uses Supabase Auth, database CRUD, and realtime sync. Without them, it uses local mock users and events.
-`ARK_API_KEY` enables AI event parsing through Volcengine Ark. `ARK_TEXT_MODEL` selects the fast text parser and defaults to `doubao-seed-1-6-lite-250615`; `ARK_MODEL` selects the vision model and defaults to `doubao-seed-2-1-pro-260628`.
+`ARK_API_KEY` enables AI event parsing through Volcengine Ark. `ARK_MODEL` selects the vision model and defaults to `doubao-seed-2-1-pro-260628`. `ARK_TEXT_MODEL` can optionally select a faster text model; when unset, text parsing uses `ARK_MODEL` with minimal reasoning and a hard timeout.
 
 ## Supabase Setup
 
