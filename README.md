@@ -53,7 +53,7 @@ The current UI redesign is implemented for the main calendar shell: Day View, We
 
 ## Not Done Yet
 
-- Full post-redesign regression testing on real devices for auth, event CRUD, drag, resize, delete Undo, relationship invites, realtime refresh, Week navigation, and Find Time Together.
+- Full post-redesign regression testing for auth, event CRUD, drag, resize, delete Undo, relationship invites, realtime refresh, Week navigation, and Find Time Together.
 - Voice transcription for AI event drafts, plus ICS generation/import.
 - Custom domain setup for the deployed PWA.
 - Real settings flows for Profile page entries such as categories, notifications, calendar sync, account privacy, and any future preference screens.
