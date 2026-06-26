@@ -5,6 +5,7 @@ const ARK_VISION_MODEL = process.env.ARK_MODEL?.trim() || "doubao-seed-2-1-pro-2
 const ARK_TEXT_MODEL = process.env.ARK_TEXT_MODEL?.trim() || ARK_VISION_MODEL;
 const ARK_RESPONSES_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
 const AI_TIMEOUT_MS = 9_000;
+const IMAGE_AI_TIMEOUT_MS = 45_000;
 const DEBUG_AI_TIMEOUT_MS = 60_000;
 const MAX_IMAGE_DATA_URL_LENGTH = 3_500_000;
 const CATEGORY_OPTIONS = ["Life", "Study", "Date", "Work", "Health", "Other"];
@@ -69,7 +70,8 @@ export async function POST(request: Request) {
   const prompt = buildPrompt({ text, now, timezone, currentDate, partnerName, hasImage });
   const model = hasImage ? ARK_VISION_MODEL : ARK_TEXT_MODEL;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), debugMode ? DEBUG_AI_TIMEOUT_MS : AI_TIMEOUT_MS);
+  const timeoutMs = debugMode ? DEBUG_AI_TIMEOUT_MS : hasImage ? IMAGE_AI_TIMEOUT_MS : AI_TIMEOUT_MS;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const arkStartedAt = Date.now();
 
   try {
@@ -332,9 +334,9 @@ function buildImageDebugPayload({
     capturedAt: new Date().toISOString(),
     timing: {
       arkElapsedMs,
-      originalServerTimeoutMs: AI_TIMEOUT_MS,
+      originalServerTimeoutMs: IMAGE_AI_TIMEOUT_MS,
       debugServerTimeoutMs: DEBUG_AI_TIMEOUT_MS,
-      originalTimeoutWouldHaveFired: arkElapsedMs > AI_TIMEOUT_MS
+      originalTimeoutWouldHaveFired: arkElapsedMs > IMAGE_AI_TIMEOUT_MS
     },
     image: {
       byteSize: imageBytes.byteLength,

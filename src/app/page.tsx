@@ -39,6 +39,9 @@ const DAY_HEIGHT = 1440 * PIXELS_PER_MINUTE;
 const MIN_EVENT_MINUTES = 15;
 const GRID_INTERVAL_MINUTES = 15;
 const AI_DEFAULT_START_MINUTES = 9 * 60;
+const AI_TEXT_TIMEOUT_MS = 10_000;
+const AI_IMAGE_TIMEOUT_MS = 45_000;
+const AI_DEBUG_IMAGE_TIMEOUT_MS = 65_000;
 const CATEGORY_OPTIONS = ["Life", "Study", "Date", "Work", "Health", "Other"] as const;
 
 type DraftRange = {
@@ -578,7 +581,8 @@ export default function Home() {
     const debugRequest = aiDebugMode && Boolean(image);
     const controller = new AbortController();
     const clientStartedAt = performance.now();
-    const timeout = window.setTimeout(() => controller.abort(), debugRequest ? 65_000 : 10_000);
+    const clientTimeoutMs = debugRequest ? AI_DEBUG_IMAGE_TIMEOUT_MS : image ? AI_IMAGE_TIMEOUT_MS : AI_TEXT_TIMEOUT_MS;
+    const timeout = window.setTimeout(() => controller.abort(), clientTimeoutMs);
     const fallbackTitle = text || "Image event";
 
     try {
@@ -1947,9 +1951,9 @@ function completeAiParseDebug(
     timing: {
       ...timing,
       clientElapsedMs: Math.round(clientElapsedMs),
-      originalClientTimeoutMs: 10_000,
-      debugClientTimeoutMs: 65_000,
-      originalClientTimeoutWouldHaveFired: clientElapsedMs > 10_000
+      originalClientTimeoutMs: AI_IMAGE_TIMEOUT_MS,
+      debugClientTimeoutMs: AI_DEBUG_IMAGE_TIMEOUT_MS,
+      originalClientTimeoutWouldHaveFired: clientElapsedMs > AI_IMAGE_TIMEOUT_MS
     },
     stages: {
       ...stages,
@@ -2035,21 +2039,21 @@ async function prepareAiImage(file: File, captureDebugMetadata: boolean) {
 
   const source = await readFileAsDataUrl(file);
   const supportedSource = /^data:image\/(?:jpeg|png|webp);base64,/i.test(source);
-  if (supportedSource && source.length <= 3_300_000) {
+  const image = await loadBrowserImage(source);
+  const maxDimension = Math.max(image.naturalWidth, image.naturalHeight);
+  if (supportedSource && source.length <= 3_300_000 && maxDimension <= 1600) {
     if (!captureDebugMetadata) return { dataUrl: source };
-    const originalImage = await loadBrowserImage(source);
     return {
       dataUrl: source,
       debugMetadata: {
-        width: originalImage.naturalWidth,
-        height: originalImage.naturalHeight,
+        width: image.naturalWidth,
+        height: image.naturalHeight,
         compressionApplied: false,
         processing: "original image passed through unchanged"
       }
     };
   }
 
-  const image = await loadBrowserImage(source);
   const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
