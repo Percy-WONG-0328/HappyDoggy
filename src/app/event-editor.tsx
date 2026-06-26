@@ -91,11 +91,12 @@ export function EventEditor({
       }}>
         <div className="eventSheetHandle" aria-hidden="true" />
 
-        <header className="eventEditorHero">
-          <button className="eventEditorClose" type="button" aria-label="Close editor" onClick={onClose}>
+        <div className="event-editor-content">
+          <header className="eventEditorHero">
+            <button className="eventEditorClose" type="button" aria-label="Close editor" onClick={onClose}>
             &times;
-          </button>
-          <div className="eventTitleWrap">
+            </button>
+            <div className="eventTitleWrap">
             <span className="eventColorSignal" style={{ background: selectedColor }} aria-hidden="true" />
             <input
               className="eventTitleInput"
@@ -106,12 +107,12 @@ export function EventEditor({
               onChange={(change) => setDraftTitle(change.target.value)}
             />
             <p className="eventSummaryLine">{summary}</p>
-          </div>
-        </header>
+            </div>
+          </header>
 
-        {notice ? <p className="eventDraftNotice">{notice}</p> : null}
+          {notice ? <p className="eventDraftNotice">{notice}</p> : null}
 
-        <section className="eventEditorSection" aria-label="When">
+          <section className="eventEditorSection" aria-label="When">
           <div className="eventSectionHeader">
             <span>When</span>
           </div>
@@ -158,9 +159,9 @@ export function EventEditor({
               <span />
             </button>
           </label>
-        </section>
+          </section>
 
-        <section className={canChangeFor ? "eventEditorSection" : "eventEditorSection readOnlySection"} aria-label="For">
+          <section className={canChangeFor ? "eventEditorSection" : "eventEditorSection readOnlySection"} aria-label="For">
           <div className="eventSectionHeader">
             <span>For</span>
           </div>
@@ -190,9 +191,9 @@ export function EventEditor({
               Together
             </button>
           </div>
-        </section>
+          </section>
 
-        <section className="eventEditorSection" aria-label="Style">
+          <section className="eventEditorSection" aria-label="Style">
           <div className="eventSectionHeader">
             <span>Style</span>
           </div>
@@ -223,7 +224,8 @@ export function EventEditor({
               />
             ))}
           </div>
-        </section>
+          </section>
+        </div>
 
         <div className="eventEditorActions">
           <button type="button" className="danger" aria-label="Delete event" onClick={onDelete} disabled={!canDelete}>
