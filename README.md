@@ -47,7 +47,7 @@ The current UI redesign is implemented for the main calendar shell: Day View, We
 - iPhone-friendly compact layout with mobile event creation controls.
 - Redesigned guava/sage calendar interface for Day View, Week View, and Profile.
 - Profile page for display name, relationship invites, and account actions.
-- Week View with previous/next week navigation and a scrollable 24-hour grid.
+- Week View with previous/next week navigation, day jumps, event editing, empty-slot creation, and a scrollable 24-hour grid.
 - Visual "Find Time Together" helper for shared free evening slots.
 - AI-assisted event drafts from natural-language text or an image, confirmed through the existing event editor.
 
@@ -57,7 +57,6 @@ The current UI redesign is implemented for the main calendar shell: Day View, We
 - Voice transcription for AI event drafts, plus ICS generation/import.
 - Custom domain setup for the deployed PWA.
 - Real settings flows for Profile page entries such as categories, notifications, calendar sync, account privacy, and any future preference screens.
-- Week View creation/editing interactions from the grid itself, such as tapping events to edit or tapping empty time to create.
 - Production polish for onboarding, empty states, accessibility review, and edge-case offline behavior.
 
 ## Completed Phases

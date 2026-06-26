@@ -1137,13 +1137,22 @@ h2 {
   left: 26%;
   width: 34%;
   min-height: 12px;
+  border: 0;
   border-radius: 5px;
   overflow: hidden;
   padding: 2px;
   color: var(--slate-text);
+  box-shadow: none;
   font-size: 0.7rem;
   font-weight: 600;
   text-align: center;
+  cursor: pointer;
+}
+
+.weekEvent:disabled {
+  border: 1px dashed rgba(105, 115, 134, 0.42);
+  cursor: default;
+  opacity: 0.72;
 }
 
 .weekEvent.current {

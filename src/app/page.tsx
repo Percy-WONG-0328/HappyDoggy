@@ -683,6 +683,70 @@ export default function Home() {
     setEditingEventId(null);
   }
 
+  async function openWeekEventEditor(event: CalendarEvent, eventDateKey: string) {
+    if (!canEditEvent(event, currentUser.id, cloudEnabled)) return;
+
+    setStatusMessage("");
+    setAppView("day");
+
+    if (dateKey !== eventDateKey) {
+      await resetDay(eventDateKey);
+    }
+
+    if (!eventsRef.current.some((eventItem) => eventItem.id === event.id)) {
+      const nextEvents = [...eventsRef.current, event].sort((a, b) => a.startAt.localeCompare(b.startAt));
+      eventsRef.current = nextEvents;
+      setEvents(nextEvents);
+    }
+
+    setEditingEventId(event.id);
+  }
+
+  function createWeekSlotEvent(eventDateKey: string, startMinutes: number) {
+    if (pendingDelete) commitPendingDelete(pendingDelete);
+
+    const snappedStart = Math.min(23 * 60, Math.max(0, snapMinutes(startMinutes)));
+    const snappedEnd = Math.min(24 * 60, snappedStart + 60);
+    const event = makeEvent(
+      crypto.randomUUID(),
+      "New event",
+      eventDateKey,
+      snappedStart,
+      eventDateKey,
+      snappedEnd,
+      "Life",
+      colors[0],
+      currentUser.id,
+      "relationship",
+      []
+    );
+    const previousEvents = dateKey === eventDateKey ? eventsRef.current : [];
+    const nextEvents = dateKey === eventDateKey ? [...eventsRef.current, event] : [event];
+
+    setStatusMessage("");
+    setAppView("day");
+    setDateKey(eventDateKey);
+    setDraft(null);
+    setDragState(null);
+    setMobileCreateLane(null);
+    eventsRef.current = nextEvents;
+    setEvents(nextEvents);
+    setEditingEventId(event.id);
+
+    if (cloudEnabled) {
+      markSaveStatus("saving");
+      createCalendarEvent(event)
+        .then(() => {
+          markSaveStatus("saved");
+          return refreshCloudEvents(eventDateKey);
+        })
+        .catch((error) => {
+          setEditingEventId(null);
+          handleRollbackError(error, previousEvents, "Create failed. The event was removed.");
+        });
+    }
+  }
+
   function minutesFromPointer(clientY: number) {
     const rect = timelineRef.current?.getBoundingClientRect();
     if (!rect) return 0;
@@ -1085,6 +1149,9 @@ export default function Home() {
           currentUser={currentUser}
           selectedUser={comparisonUser}
           timezone={timezone}
+          isEventEditable={(event) => canEditEvent(event, currentUser.id, cloudEnabled)}
+          onEventOpen={(event, eventDateKey) => void openWeekEventEditor(event, eventDateKey)}
+          onEmptySlotCreate={createWeekSlotEvent}
           onWeekChange={(nextDateKey) => void resetDay(nextDateKey)}
         />
       ) : (
@@ -1514,6 +1581,9 @@ function WeekView({
   currentUser,
   selectedUser,
   timezone,
+  isEventEditable,
+  onEventOpen,
+  onEmptySlotCreate,
   onWeekChange
 }: {
   dates: string[];
@@ -1522,6 +1592,9 @@ function WeekView({
   currentUser: CalendarUser;
   selectedUser: CalendarUser;
   timezone: string;
+  isEventEditable: (event: CalendarEvent) => boolean;
+  onEventOpen: (event: CalendarEvent, dateKey: string) => void;
+  onEmptySlotCreate: (dateKey: string, startMinutes: number) => void;
   onWeekChange: (dateKey: string) => void;
 }) {
   const weekGridRef = useRef<HTMLDivElement | null>(null);
@@ -1566,6 +1639,14 @@ function WeekView({
     noFreeEveningTimerRef.current = window.setTimeout(() => setShowNoFreeEvenings(false), 3000);
   }
 
+  function startMinutesFromWeekClick(event: React.MouseEvent<HTMLDivElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.height) return startMinute;
+
+    const position = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+    return startMinute + (position / rect.height) * totalMinutes;
+  }
+
   return (
     <section className="weekPage" aria-label="Week view">
       <div className="weekSummary">
@@ -1588,7 +1669,7 @@ function WeekView({
           {dates.map((day) => {
             const parts = getDateParts(day);
             return (
-              <button className={day === currentDateKey ? "today" : ""} type="button" key={day}>
+              <button className={day === currentDateKey ? "today" : ""} type="button" key={day} onClick={() => onWeekChange(day)}>
                 <span>{parts.weekday}</span>
                 <strong>{parts.day}</strong>
               </button>
@@ -1613,7 +1694,11 @@ function WeekView({
               );
 
               return (
-                <div className={day === currentDateKey ? "weekColumn todayColumn" : "weekColumn"} key={day}>
+                <div
+                  className={day === currentDateKey ? "weekColumn todayColumn" : "weekColumn"}
+                  key={day}
+                  onClick={(event) => onEmptySlotCreate(day, startMinutesFromWeekClick(event))}
+                >
                   {highlightedEveningDays.includes(day) ? (
                     <span
                       className="sharedEveningHighlight"
@@ -1632,12 +1717,20 @@ function WeekView({
                     const isShared = segment.lane === "shared";
                     const className = ["weekEvent", segment.lane, isShared ? "wide" : ""].filter(Boolean).join(" ");
 
+                    const editable = isEventEditable(segment.event);
+
                     return (
-                      <span
+                      <button
                         className={className}
+                        type="button"
                         key={segment.segmentId}
                         style={{ top: `${top}%`, height: `${Math.max(height, 3)}%` }}
                         aria-label={`${segment.event.title} ${formatTime(segment.startMinutes)}-${formatTime(segment.endMinutes)}`}
+                        disabled={!editable}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (editable) onEventOpen(segment.event, day);
+                        }}
                       />
                     );
                   })}
