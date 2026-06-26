@@ -554,12 +554,6 @@ h2 {
   display: none;
 }
 
-.activeCreate {
-  border: 0 !important;
-  background: var(--ink-800) !important;
-  color: #fdf4e9 !important;
-}
-
 .dayTimelineScrollArea {
   padding-bottom: 96px;
 }
@@ -571,6 +565,7 @@ h2 {
   left: 0;
   z-index: 100;
   display: flex;
+  justify-content: center;
   gap: 12px;
   padding: 12px 16px 28px;
   background: linear-gradient(to top, var(--paper) 70%, transparent);
@@ -587,18 +582,16 @@ h2 {
   font-size: 1rem;
 }
 
-.dayCreateActions .createForMe,
-.dayCreateActions .createForBoth {
-  flex: 1;
-}
-
-.dayCreateActions .createForMe {
+.dayCreateActions .quickCreateButton {
+  flex: none;
+  width: 58px;
+  display: inline-grid;
+  place-items: center;
   background: var(--guava);
-}
-
-.dayCreateActions .createForBoth {
-  background: var(--sage);
-  color: #f7f8f2;
+  padding: 0;
+  font-size: 1.65rem;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .dayCreateActions .aiCreateButton {
@@ -616,15 +609,6 @@ h2 {
   fill: currentColor;
 }
 
-.dayCreateActions .createForMe.activeCreate {
-  background: var(--guava) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.dayCreateActions .createForBoth.activeCreate {
-  background: var(--sage) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
 
 .accountPanel {
   display: grid;
@@ -1551,6 +1535,17 @@ h2 {
   font-weight: 500;
 }
 
+.modalLayer.eventEditorLayer {
+  overflow: hidden;
+  padding: 0;
+  touch-action: none;
+}
+
+.eventEditorLayer .event-editor-sheet,
+.eventEditorLayer .event-editor-content {
+  touch-action: pan-y;
+}
+
 .modalLayer {
   position: fixed;
   inset: 0;
@@ -1753,6 +1748,7 @@ h2 {
 
 .event-editor-sheet {
   max-height: min(86dvh, 720px);
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -1767,34 +1763,35 @@ h2 {
 .event-editor-content {
   flex: 1;
   min-height: 0;
+  height: 100%;
   display: grid;
   gap: 18px;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  padding-top: 20px;
   padding-bottom: 18px;
 }
 
+.event-editor-sheet input:focus,
 .event-editor-sheet input:focus-visible,
+.event-editor-sheet select:focus,
 .event-editor-sheet select:focus-visible,
+.event-editor-sheet textarea:focus,
 .event-editor-sheet textarea:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--sage-block) !important;
 }
 
-.eventSheetHandle {
-  width: 42px;
-  height: 4px;
-  justify-self: center;
-  border-radius: 999px;
-  background: var(--line-strong);
-}
-
 .eventEditorHero {
+  flex: none;
   display: grid;
   grid-template-columns: 44px 1fr;
   align-items: start;
   gap: 12px;
-  padding-bottom: 2px;
+  overflow: visible;
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 0 20px;
 }
 
 .eventEditorClose {
@@ -1817,6 +1814,8 @@ h2 {
   align-items: center;
   column-gap: 10px;
   row-gap: 5px;
+  overflow: visible;
+  padding-top: 4px;
 }
 
 .eventColorSignal {
@@ -2002,8 +2001,9 @@ h2 {
 
 .eventEditorActions {
   flex: none;
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
+  position: relative;
+  bottom: auto;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2070,14 +2070,19 @@ h2 {
   .event-editor-content {
     flex: 1;
     min-height: 0;
+    height: 100%;
+    overflow-x: hidden;
     overflow-y: auto;
+    overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    padding-top: 20px;
     padding-bottom: calc(80px + env(safe-area-inset-bottom));
   }
 
   .eventEditorHero {
     grid-template-columns: 40px 1fr;
     gap: 10px;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
   }
 
   .eventEditorClose {
@@ -2482,8 +2487,12 @@ h2 {
   .editor.event-editor-sheet .event-editor-content {
     flex: 1;
     min-height: 0;
+    height: 100%;
+    overflow-x: hidden;
     overflow-y: auto;
+    overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    padding-top: 20px;
     padding-bottom: calc(80px + env(safe-area-inset-bottom));
   }
 }

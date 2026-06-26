@@ -57,11 +57,14 @@ export function EventEditor({
   }, [event, selectedUser]);
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
     };
   }, []);
 
@@ -84,19 +87,16 @@ export function EventEditor({
   }
 
   return (
-    <div className="modalLayer" role="dialog" aria-modal="true" aria-label="Edit event">
+    <div className="modalLayer eventEditorLayer" role="dialog" aria-modal="true" aria-label="Edit event">
       <form className="editor event-editor-sheet" onSubmit={(submitEvent) => {
         submitEvent.preventDefault();
         if (canEdit) saveDraft();
       }}>
-        <div className="eventSheetHandle" aria-hidden="true" />
-
-        <div className="event-editor-content">
-          <header className="eventEditorHero">
-            <button className="eventEditorClose" type="button" aria-label="Close editor" onClick={onClose}>
+        <header className="eventEditorHero">
+          <button className="eventEditorClose" type="button" aria-label="Close editor" onClick={onClose}>
             &times;
-            </button>
-            <div className="eventTitleWrap">
+          </button>
+          <div className="eventTitleWrap">
             <span className="eventColorSignal" style={{ background: selectedColor }} aria-hidden="true" />
             <input
               className="eventTitleInput"
@@ -107,9 +107,10 @@ export function EventEditor({
               onChange={(change) => setDraftTitle(change.target.value)}
             />
             <p className="eventSummaryLine">{summary}</p>
-            </div>
-          </header>
+          </div>
+        </header>
 
+        <div className="event-editor-content">
           {notice ? <p className="eventDraftNotice">{notice}</p> : null}
 
           <section className="eventEditorSection" aria-label="When">
@@ -286,7 +287,7 @@ function normalizeDraftRange(dateKey: string, startTime: string, endTime: string
 function buildSummary(dateKey: string, startTime: string, endTime: string, isAllDay: boolean, category: CalendarEvent["category"], timezone: string) {
   const dateText = formatSummaryDate(dateKey, timezone);
   const timeText = isAllDay ? "All day" : `${startTime || "09:00"}-${endTime || "10:00"}`;
-  return `${dateText} · ${timeText} · ${category}`;
+  return `${dateText} \u00b7 ${timeText} \u00b7 ${category}`;
 }
 
 function formatSummaryDate(dateKey: string, timezone: string) {

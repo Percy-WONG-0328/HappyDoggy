@@ -116,7 +116,6 @@ export default function Home() {
   );
   const [draft, setDraft] = useState<DraftRange | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
-  const [mobileCreateLane, setMobileCreateLane] = useState<RenderLane | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authEmail, setAuthEmail] = useState("");
@@ -707,6 +706,7 @@ export default function Home() {
 
     const snappedStart = Math.min(23 * 60, Math.max(0, snapMinutes(startMinutes)));
     const snappedEnd = Math.min(24 * 60, snappedStart + 60);
+    const participantUserIds = selectedUser ? [selectedUser.id] : [];
     const event = makeEvent(
       crypto.randomUUID(),
       "New event",
@@ -715,10 +715,10 @@ export default function Home() {
       eventDateKey,
       snappedEnd,
       "Life",
-      colors[0],
+      selectedUser ? colors[3] : colors[0],
       currentUser.id,
-      "relationship",
-      []
+      selectedUser ? "relationship" : "private",
+      participantUserIds
     );
     const previousEvents = dateKey === eventDateKey ? eventsRef.current : [];
     const nextEvents = dateKey === eventDateKey ? [...eventsRef.current, event] : [event];
@@ -728,7 +728,6 @@ export default function Home() {
     setDateKey(eventDateKey);
     setDraft(null);
     setDragState(null);
-    setMobileCreateLane(null);
     eventsRef.current = nextEvents;
     setEvents(nextEvents);
     setEditingEventId(event.id);
@@ -739,6 +738,48 @@ export default function Home() {
         .then(() => {
           markSaveStatus("saved");
           return refreshCloudEvents(eventDateKey);
+        })
+        .catch((error) => {
+          setEditingEventId(null);
+          handleRollbackError(error, previousEvents, "Create failed. The event was removed.");
+        });
+    }
+  }
+
+  function createQuickEvent() {
+    if (pendingDelete) commitPendingDelete(pendingDelete);
+
+    const lane: RenderLane = selectedUser ? "shared" : "current";
+    const startMinutes = 9 * 60;
+    const endMinutes = startMinutes + 60;
+    const participantUserIds = lane === "shared" && selectedUser ? [selectedUser.id] : [];
+    const event = makeEvent(
+      crypto.randomUUID(),
+      "New event",
+      dateKey,
+      startMinutes,
+      dateKey,
+      endMinutes,
+      "Life",
+      lane === "shared" ? colors[3] : colors[0],
+      currentUser.id,
+      lane === "current" ? "private" : "relationship",
+      participantUserIds
+    );
+    const previousEvents = eventsRef.current;
+    const nextEvents = [...eventsRef.current, event];
+
+    setStatusMessage("");
+    eventsRef.current = nextEvents;
+    setEvents(nextEvents);
+    setEditingEventId(event.id);
+
+    if (cloudEnabled) {
+      markSaveStatus("saving");
+      createCalendarEvent(event)
+        .then(() => {
+          markSaveStatus("saved");
+          return refreshCloudEvents(dateKey);
         })
         .catch((error) => {
           setEditingEventId(null);
@@ -758,14 +799,6 @@ export default function Home() {
     const minutes = minutesFromPointer(event.clientY);
     const target = event.currentTarget;
     const pointerId = event.pointerId;
-
-    if (event.pointerType === "touch" && mobileCreateLane) {
-      event.preventDefault();
-      target.setPointerCapture(pointerId);
-      setDragState({ kind: "create", lane: mobileCreateLane, anchorMinutes: minutes });
-      setDraft({ lane: mobileCreateLane, startMinutes: minutes, endMinutes: minutes + MIN_EVENT_MINUTES });
-      return;
-    }
 
     if (event.pointerType === "touch") {
       longPressRef.current = window.setTimeout(() => {
@@ -855,7 +888,7 @@ export default function Home() {
         "Life",
         draft.lane === "shared" ? colors[3] : colors[0],
         ownerUserId,
-        "relationship",
+        draft.lane === "current" ? "private" : "relationship",
         participantUserIds
       );
       const previousEvents = eventsRef.current;
@@ -879,8 +912,6 @@ export default function Home() {
         setEditingEventId(event.id);
       }
     }
-
-    setMobileCreateLane(null);
     setDraft(null);
     setDragState(null);
   }
@@ -1264,17 +1295,17 @@ export default function Home() {
             <div className="dayCreateActions" aria-label="Create event">
               <button
                 type="button"
-                className={`createForMe ${mobileCreateLane === "current" ? "activeCreate" : ""}`}
-                onClick={() => setMobileCreateLane((lane) => (lane === "current" ? null : "current"))}
+                className="quickCreateButton"
+                aria-label="Create event"
+                onClick={createQuickEvent}
               >
-                + Add for me
+                +
               </button>
               <button
                 type="button"
                 className="aiCreateButton"
                 aria-label="Add with AI"
                 onClick={() => {
-                  setMobileCreateLane(null);
                   setAiComposerOpen(true);
                 }}
               >
@@ -1284,15 +1315,6 @@ export default function Home() {
                   <path d="M19 13l.65 2.35L22 16l-2.35.65L19 19l-.65-2.35L16 16l2.35-.65L19 13Z" />
                 </svg>
               </button>
-              {selectedUser ? (
-                <button
-                  type="button"
-                  className={`createForBoth ${mobileCreateLane === "shared" ? "activeCreate" : ""}`}
-                  onClick={() => setMobileCreateLane((lane) => (lane === "shared" ? null : "shared"))}
-                >
-                  + For both
-                </button>
-              ) : null}
             </div>
           )}
         </>
