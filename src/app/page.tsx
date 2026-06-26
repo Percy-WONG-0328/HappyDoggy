@@ -27,6 +27,7 @@ import {
   formatTime,
   getDefaultTimezone,
   getLocalDateKey,
+  localMinutes,
   snapMinutes,
   zonedTimeToUtc
 } from "@/lib/time";
@@ -749,10 +750,11 @@ export default function Home() {
   function createQuickEvent() {
     if (pendingDelete) commitPendingDelete(pendingDelete);
 
-    const lane: RenderLane = selectedUser ? "shared" : "current";
-    const startMinutes = 9 * 60;
-    const endMinutes = startMinutes + 60;
-    const participantUserIds = lane === "shared" && selectedUser ? [selectedUser.id] : [];
+    const now = new Date();
+    const isToday = dateKey === getLocalDateKey(now, timezone);
+    const nextFullHour = Math.floor(localMinutes(now, timezone) / 60 + 1) * 60;
+    const startMinutes = isToday ? Math.min(23 * 60, nextFullHour) : 9 * 60;
+    const endMinutes = Math.min(24 * 60, startMinutes + 60);
     const event = makeEvent(
       crypto.randomUUID(),
       "New event",
@@ -761,10 +763,10 @@ export default function Home() {
       dateKey,
       endMinutes,
       "Life",
-      lane === "shared" ? colors[3] : colors[0],
+      colors[0],
       currentUser.id,
-      lane === "current" ? "private" : "relationship",
-      participantUserIds
+      "private",
+      []
     );
     const previousEvents = eventsRef.current;
     const nextEvents = [...eventsRef.current, event];
@@ -1292,19 +1294,23 @@ export default function Home() {
           </div>
 
           {editingEvent || aiComposerOpen ? null : (
-            <div className="dayCreateActions" aria-label="Create event">
+            <div className="dayCreateActions" role="toolbar" aria-label="Calendar actions">
               <button
                 type="button"
                 className="quickCreateButton"
-                aria-label="Create event"
+                aria-label="Create new event"
                 onClick={createQuickEvent}
               >
-                +
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M8 3.25v9.5M3.25 8h9.5" />
+                </svg>
+                <span>New</span>
               </button>
+              <span className="dayCreateDivider" aria-hidden="true" />
               <button
                 type="button"
                 className="aiCreateButton"
-                aria-label="Add with AI"
+                aria-label="AI event draft"
                 onClick={() => {
                   setAiComposerOpen(true);
                 }}

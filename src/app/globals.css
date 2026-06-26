@@ -388,8 +388,7 @@ h2 {
   width: 152px;
 }
 
-.dateControls,
-.mobileCreateActions {
+.dateControls {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -550,62 +549,93 @@ h2 {
   font-weight: 600;
 }
 
-.mobileCreateActions {
-  display: none;
-}
 
 .dayTimelineScrollArea {
-  padding-bottom: 96px;
+  padding-bottom: 112px;
 }
 
 .dayCreateActions {
   position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
   z-index: 100;
   display: flex;
-  justify-content: center;
-  gap: 12px;
-  padding: 12px 16px 28px;
-  background: linear-gradient(to top, var(--paper) 70%, transparent);
+  align-items: center;
+  gap: 2px;
+  transform: translateX(-50%);
+  border: 1px solid #DDD8CD;
+  border-radius: var(--r-pill);
+  background: #F0EBE2;
+  padding: 5px;
 }
 
 .dayCreateActions button {
   -webkit-tap-highlight-color: transparent;
-  min-height: 44px;
   border: 0;
-  border-radius: var(--r-pill);
-  color: #fdf4e9;
-  padding: 0 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 80ms ease, background-color 120ms ease;
+}
+
+.dayCreateActions button:active {
+  transform: scale(0.96);
+}
+
+.dayCreateActions button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--sage-block);
 }
 
 .dayCreateActions .quickCreateButton {
-  flex: none;
-  width: 58px;
-  display: inline-grid;
-  place-items: center;
-  background: var(--guava);
-  padding: 0;
-  font-size: 1.65rem;
-  font-weight: 600;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: var(--r-pill);
+  background: #C4796B;
+  color: #ffffff;
+  padding: 11px 22px 11px 18px;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  letter-spacing: 0.2px;
   line-height: 1;
 }
 
+.dayCreateActions .quickCreateButton svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.dayCreateDivider {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: #D5D0C5;
+}
+
 .dayCreateActions .aiCreateButton {
-  flex: none;
-  width: 52px;
-  display: inline-grid;
-  place-items: center;
-  background: var(--ink-800);
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: transparent;
+  color: #8B8579;
   padding: 0;
 }
 
+.dayCreateActions .aiCreateButton:hover,
+.dayCreateActions .aiCreateButton:focus-visible {
+  background: rgba(0, 0, 0, 0.04);
+}
+
 .dayCreateActions .aiCreateButton svg {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
   fill: currentColor;
 }
 
@@ -2320,11 +2350,6 @@ h2 {
     width: 100%;
   }
 
-  .mobileCreateActions {
-    display: none;
-    grid-column: 1;
-    gap: 7px;
-  }
 
   .toolbar select {
     grid-column: 1 / -1;
