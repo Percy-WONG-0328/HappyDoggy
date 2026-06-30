@@ -3,13 +3,13 @@ import PwaRegister from "./pwa-register";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "HappyDoggy",
-  description: "Private split daily calendar",
-  applicationName: "HappyDoggy",
+  title: "Fig",
+  description: "A quiet calendar for two.",
+  applicationName: "Fig",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "HappyDoggy",
+    title: "Fig",
     statusBarStyle: "default"
   },
   icons: {

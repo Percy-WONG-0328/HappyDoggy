@@ -1,6 +1,6 @@
-# HappyDoggy
+# Fig
 
-HappyDoggy is a private two-person shared calendar PWA. It started as a local interaction prototype and has now moved to a deployable web app with Supabase Auth, cloud sync, relationship invites, realtime updates, and iPhone home-screen support.
+Fig is a quiet calendar for two. It helps two people see each other's day, find time together, and keep personal boundaries through a split-screen timeline. The project started under the HappyDoggy codename and has now moved to a deployable PWA with Supabase Auth, cloud sync, relationship invites, realtime updates, and iPhone home-screen support.
 
 Production:
 
@@ -12,7 +12,7 @@ https://github.com/Percy-WONG-0328/HappyDoggy
 
 ## Current Status
 
-The app supports self-service account registration, login, display-name editing, inviting another user by email, accepting invitations, and automatically creating an active two-way relationship. Once connected, two users can create private events, relationship-visible events, and shared events that both participants can edit or delete.
+The app supports self-service account registration, login, display-name editing, inviting another user by email, accepting invitations, and automatically creating an active two-way relationship. Once connected, two users can create Only Mine events, Visible events, and Ours events that both participants can edit or delete.
 
 The main branch is deployable to Vercel. Local development falls back to mock data when Supabase environment variables are not configured.
 
@@ -29,7 +29,7 @@ The current UI redesign is implemented for the main calendar shell: Day View, We
 - Resize events from the top or bottom.
 - Event editor modal.
 - All-day events.
-- Private, relationship-visible, and shared event visibility.
+- Only Mine, Visible, and Ours event boundaries.
 - Supabase Auth registration and login.
 - User profiles with editable display names.
 - Email-based relationship invites.

@@ -154,7 +154,7 @@ export async function inviteUserByEmail(email: string) {
     .eq("email", normalizedEmail)
     .maybeSingle();
   if (profileError) throw profileError;
-  if (!profile) throw new Error("No HappyDoggy account uses that email yet.");
+  if (!profile) throw new Error("No Fig account uses that email yet.");
 
   const invitedProfile = profile as ProfileRow;
   const { data: existingRelationship, error: existingError } = await supabase

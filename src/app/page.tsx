@@ -1042,7 +1042,7 @@ export default function Home() {
     return (
       <main className="loginShell">
         <form className="loginPanel" onSubmit={handleAuthSubmit}>
-          <p className="eyebrow">HappyDoggy Phase 3</p>
+          <p className="eyebrow">Fig private beta</p>
           <h1>{authMode === "login" ? "Sign in" : "Create account"}</h1>
           <div className="segmentedControl" aria-label="Authentication mode">
             <button
@@ -1521,7 +1521,7 @@ function ProfileView({
           </div>
           <div>
             <h3>{selectedUser ? `${currentUser.displayName} & ${selectedUser.displayName}` : "Waiting for your person"}</h3>
-            <p>{selectedUser ? "connected in HappyDoggy" : "send or accept an invite to begin"}</p>
+            <p>{selectedUser ? "connected in Fig" : "send or accept an invite to begin"}</p>
           </div>
         </div>
         <div className="pairStats">

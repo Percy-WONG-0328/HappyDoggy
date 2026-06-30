@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "HappyDoggy",
-    short_name: "HappyDoggy",
-    description: "Private shared daily calendar",
+    name: "Fig: Calendar for Two",
+    short_name: "Fig",
+    description: "A quiet calendar for two.",
     start_url: "/",
     scope: "/",
     display: "standalone",

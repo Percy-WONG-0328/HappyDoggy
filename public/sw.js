@@ -1,4 +1,4 @@
-const CACHE_NAME = "happydoggy-shell-v3";
+const CACHE_NAME = "fig-shell-v1";
 const SHELL_URLS = ["/", "/offline.html", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
