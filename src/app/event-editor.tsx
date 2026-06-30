@@ -173,7 +173,7 @@ export function EventEditor({
               disabled={!canChangeFor}
               onClick={() => setForMode("just-me")}
             >
-              Just me
+              Only Mine
             </button>
             <button
               type="button"
@@ -181,7 +181,7 @@ export function EventEditor({
               disabled={!canChangeFor}
               onClick={() => setForMode("let-see")}
             >
-              Let them see
+              Visible
             </button>
             <button
               type="button"
@@ -189,7 +189,7 @@ export function EventEditor({
               disabled={!canChangeFor || !selectedUser}
               onClick={() => setForMode("together")}
             >
-              Together
+              Ours
             </button>
           </div>
           </section>
