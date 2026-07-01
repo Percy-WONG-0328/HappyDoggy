@@ -4,7 +4,7 @@ Fig is a quiet calendar for two. It helps two people see each other's day, find 
 
 Production:
 
-https://happy-doggy-eosin.vercel.app/
+https://withfig.app/
 
 Repository:
 
@@ -55,7 +55,6 @@ The current UI redesign is implemented for the main calendar shell: Day View, We
 
 - Full post-redesign regression testing for auth, event CRUD, drag, resize, delete Undo, relationship invites, realtime refresh, Week navigation, and Find Time Together.
 - Voice transcription for AI event drafts, plus ICS generation/import.
-- Custom domain setup for the deployed PWA.
 - Real settings flows for Profile page entries such as categories, notifications, calendar sync, account privacy, and any future preference screens.
 - Production polish for onboarding, empty states, accessibility review, and edge-case offline behavior.
 
@@ -101,6 +100,12 @@ When both variables are present, the app uses Supabase Auth, database CRUD, and 
 
 ## Supabase Setup
 
+Production domain:
+
+- Primary: https://withfig.app/
+- WWW: https://www.withfig.app/ redirects to https://withfig.app/
+- Legacy Vercel URL: https://happy-doggy-eosin.vercel.app/
+
 For a fresh Supabase project, run:
 
 ```text
@@ -119,14 +124,34 @@ Additional SQL patch files are kept in `supabase/` for historical fixes and targ
 - `fix_shared_event_permissions.sql`
 - `cleanup_owner_participants.sql`
 
+
+### Supabase Auth URL Configuration
+
+The current app uses email/password auth through `signUp` and `signInWithPassword`; it does not currently use OAuth, magic links, password reset, or an explicit `redirectTo` option. Direct email/password login should work on `withfig.app` as long as the Supabase URL and anon key are configured in Vercel.
+
+Still configure Supabase Auth before broader testing because email confirmation and future password reset flows depend on it:
+
+1. In Supabase, open **Authentication > URL Configuration**.
+2. Set **Site URL** to `https://withfig.app`.
+3. Add these **Redirect URLs**:
+   - `https://withfig.app/**`
+   - `https://www.withfig.app/**`
+   - `https://happy-doggy-eosin.vercel.app/**`
+   - `http://localhost:3000/**`
+4. Keep the production URL exact and use localhost only for development.
+
+Reference: https://supabase.com/docs/guides/auth/redirect-urls
+
 ## PWA Deployment
 
 The app is a web-first PWA rather than a native iOS App Store app.
 
 1. Deploy the Next.js app to Vercel.
 2. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in Vercel project settings.
-3. Open the deployed URL in iPhone Safari.
-4. Use Safari Share > Add to Home Screen.
+3. Connect `withfig.app` as the primary production domain.
+4. Redirect `www.withfig.app` to `https://withfig.app/`.
+5. Open `https://withfig.app/` in iPhone Safari.
+6. Use Safari Share > Add to Home Screen.
 
 PWA files:
 

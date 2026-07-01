@@ -120,19 +120,22 @@ The current Event Editor should keep its functional model while using **Only Min
 
 Do not buy a HappyDoggy domain.
 
-Good domain candidates should be short, brandable, and compatible with App Store usage.
+The selected production domain is:
 
-Candidate patterns:
+**withfig.app**
 
-- usefig.app
-- figcalendar.app
-- figfortwo.app
-- withfig.app
-- figtime.app
+Domain routing:
 
-Domain decision rule:
+- https://withfig.app/ is the primary production URL.
+- https://www.withfig.app/ redirects to https://withfig.app/.
+- The legacy Vercel URL remains available as a fallback, but should not be used in public-facing copy.
 
-Prefer clarity over cleverness. If users can read the domain and immediately connect it to the app name, it is good enough.
+Decision rationale:
+
+- Short and brandable
+- Reads naturally as an invitation to use Fig
+- Avoids over-locking the product to the word calendar
+- Works well for PWA and eventual App Store positioning
 
 ## 9. Roadmap Implications
 
@@ -160,18 +163,17 @@ Deprioritize:
 
 ## 10. Open Questions
 
-These are still unresolved and should be answered before buying a domain or preparing App Store assets:
+These are still unresolved and should be answered before preparing App Store assets:
 
 1. Is **Fig** legally available enough for the intended launch markets?
-2. Which domain is actually available at a reasonable price?
-3. Should the Chinese-facing name translate Fig literally, phonetically, or use a separate concept?
-4. Should the first launch be English-only, Chinese-only, or bilingual?
-5. Should App Store screenshots emphasize long-distance couples, student couples, or young working couples first?
+2. Should the Chinese-facing name translate Fig literally, phonetically, or use a separate concept?
+3. Should the first launch be English-only, Chinese-only, or bilingual?
+4. Should App Store screenshots emphasize long-distance couples, student couples, or young working couples first?
 
 ## 11. Current Recommendation
 
 Proceed with Fig as the working product identity.
 
-Do not yet purchase a domain until availability and trademark checks are done for the final candidate.
+The production domain is now purchased and configured at https://withfig.app/. Keep the product narrow while validating the identity and core timeline experience.
 
 Do not broaden the product. The narrowness is the advantage.
